@@ -1,0 +1,23 @@
+[project]
+name = "erpnext_nordigen"
+authors = [
+    {name = "Ameen Ahmed (Level Up)", email = "kid1194@gmail.com"}
+]
+description = "Nordigen integration for ERPNext."
+keywords = ["frappe", "erpnext", "nordigen", "open banking", "integration"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python"
+]
+requires-python = ">=3.8"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    "frappe>=14.0.0",
+    "erpnext>=14.0.0"
+]
+
+[project.urls]
+Documentation = "https://github.com/monolithon/erpnext_nordigen"
+Source = "https://github.com/monolithon/erpnext_nordigen"

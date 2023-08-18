@@ -1,0 +1,127 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "autoname": "format:NAS-{YYYY}-{MM}-{DD}-{#####}",
+ "creation": "2022-04-04 04:04:04.119400",
+ "description": "Nordigen banks sync log",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "main_section",
+  "bank",
+  "bank_account",
+  "main_column",
+  "trigger",
+  "total_transactions",
+  "sync_id"
+ ],
+ "fields": [
+  {
+   "fieldname": "main_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bank",
+   "fieldtype": "Link",
+   "label": "Bank",
+   "options": "Nordigen Bank",
+   "reqd": 1,
+   "bold": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "bank_account",
+   "fieldtype": "Data",
+   "label": "Bank Account",
+   "reqd": 1,
+   "bold": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "main_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "trigger",
+   "fieldtype": "Select",
+   "label": "Trigger",
+   "options": "Auto\nManual",
+   "reqd": 1,
+   "bold": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "total_transactions",
+   "fieldtype": "Int",
+   "label": "Total Transactions",
+   "default": "0",
+   "reqd": 1,
+   "bold": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "sync_id",
+   "fieldtype": "Data",
+   "label": "Sync ID",
+   "reqd": 1,
+   "bold": 1,
+   "hidden": 1
+  }
+ ],
+ "icon": "fa fa-log",
+ "links": [],
+ "modified": "2022-04-04 04:04:04.119400",
+ "modified_by": "Administrator",
+ "module": "ERPNext Nordigen",
+ "name": "Nordigen Sync Log",
+ "naming_rule": "By Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "set_user_permissions": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "set_user_permissions": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
