@@ -1,4 +1,4 @@
-# ERPNext Nordigen
+# ERPNext Bankaccountdata Gocardless
 
 A plugin that integrates Nordigen open banking services with ERPNext.
 
