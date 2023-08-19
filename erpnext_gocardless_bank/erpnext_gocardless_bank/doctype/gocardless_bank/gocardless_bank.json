@@ -1,0 +1,228 @@
+{
+ "actions": [],
+ "allow_copy": 1,
+ "allow_import": 1,
+ "autoname": "field:title",
+ "creation": "2022-04-04 04:04:04.119400",
+ "description": "Gocardless linked banks",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "main_section",
+  "title",
+  "disabled",
+  "auto_sync",
+  "main_column",
+  "sync_html",
+  "config_section",
+  "company",
+  "config_column",
+  "country",
+  "bank_section",
+  "bank",
+  "bank_id",
+  "bank_column",
+  "auth_expiry",
+  "transaction_days",
+  "auth_id",
+  "auth_status",
+  "bank_accounts_section",
+  "bank_accounts",
+  "bank_accounts_html"
+ ],
+ "fields": [
+  {
+   "fieldname": "main_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1,
+   "unique": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Is Disabled",
+   "default": "0",
+   "depends_on": "eval:!doc.__islocal"
+  },
+  {
+   "fieldname": "main_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "auto_sync",
+   "fieldtype": "Check",
+   "label": "Auto Sync",
+   "read_only_depends_on": "eval:doc.disabled"
+  },
+  {
+   "fieldname": "sync_html",
+   "fieldtype": "HTML",
+   "label": "Sync Limitation",
+   "options": ""
+  },
+  
+  {
+   "fieldname": "config_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "bold": 1,
+   "read_only_depends_on": "eval:!doc.__islocal",
+   "set_once": 1,
+   "in_filter": 1,
+   "in_standard_filter": 1,
+   "in_list_view": 1,
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "config_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "country",
+   "fieldtype": "Link",
+   "label": "Country",
+   "options": "Country",
+   "fetch_from": "company.country",
+   "read_only_depends_on": "!doc.__islocal || !doc.company",
+   "set_once": 1,
+   "ignore_user_permissions": 1
+  },
+  
+  {
+   "fieldname": "bank_section",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bank",
+   "fieldtype": "Autocomplete",
+   "label": "Bank",
+   "reqd": 1,
+   "bold": 1,
+   "read_only_depends_on": "eval:!doc.__islocal || !doc.company",
+   "set_once": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bank_id",
+   "fieldtype": "Data",
+   "label": "Bank ID",
+   "default": "",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bank_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "auth_expiry",
+   "fieldtype": "Date",
+   "label": "Auth Expiry",
+   "default": "",
+   "hidden": 1
+  },
+  {
+   "fieldname": "transaction_days",
+   "fieldtype": "Int",
+   "label": "Transaction Days",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auth_id",
+   "fieldtype": "Data",
+   "label": "Auth ID",
+   "default": "",
+   "hidden": 1
+  },
+  {
+   "fieldname": "auth_status",
+   "fieldtype": "Select",
+   "label": "Auth Status",
+   "otpions": "Unlinked\nLinked",
+   "default": "Unlinked",
+   "depends_on": "eval:!doc.__islocal",
+   "read_only": 1
+  },
+  
+  {
+   "fieldname": "bank_accounts_section",
+   "fieldtype": "Section Break",
+   "label": "Bank Accounts",
+   "depends_on": "eval:!doc.__islocal && (doc.auth_id || '').length"
+  },
+  {
+   "fieldname": "bank_accounts_html",
+   "fieldtype": "HTML",
+   "label": "Bank Accounts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bank_accounts",
+   "fieldtype": "Table",
+   "label": "Bank Accounts",
+   "options": "Gocardless Bank Account",
+   "hidden": 1
+  }
+ ],
+ "icon": "fa fa-bank",
+ "links": [],
+ "modified": "2022-04-04 04:04:04.119400",
+ "modified_by": "Administrator",
+ "module": "ERPNext Gocardless Bank",
+ "name": "Gocardless Bank",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "set_user_permissions": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  },
+  {
+   "amend": 1,
+   "cancel": 1,
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "import": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Administrator",
+   "set_user_permissions": 1,
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
