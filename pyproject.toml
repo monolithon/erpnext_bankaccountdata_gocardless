@@ -1,12 +1,12 @@
 [project]
-name = "erpnext_nordigen"
+name = "erpnext_gocardless_bank"
 authors = [
     {name = "Ameen Ahmed (Level Up)", email = "kid1194@gmail.com"}
 ]
-description = "Nordigen integration for ERPNext."
-keywords = ["frappe", "erpnext", "nordigen", "open banking", "integration"]
+description = "Gocardless open banking services integration for ERPNext."
+keywords = ["frappe", "erpnext", "nordigen", "gocardless", "open banking", "integration"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python"
 ]
@@ -19,5 +19,5 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/monolithon/erpnext_nordigen"
-Source = "https://github.com/monolithon/erpnext_nordigen"
+Documentation = "https://github.com/monolithon/erpnext_gocardless_bank"
+Source = "https://github.com/monolithon/erpnext_gocardless_bank"

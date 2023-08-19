@@ -4,15 +4,15 @@ include *.json
 include *.md
 include *.py
 include *.txt
-recursive-include erpnext_nordigen *.css
-recursive-include erpnext_nordigen *.csv
-recursive-include erpnext_nordigen *.html
-recursive-include erpnext_nordigen *.ico
-recursive-include erpnext_nordigen *.js
-recursive-include erpnext_nordigen *.json
-recursive-include erpnext_nordigen *.md
-recursive-include erpnext_nordigen *.png
-recursive-include erpnext_nordigen *.py
-recursive-include erpnext_nordigen *.svg
-recursive-include erpnext_nordigen *.txt
-recursive-exclude erpnext_nordigen *.pyc
+recursive-include erpnext_gocardless_bank *.css
+recursive-include erpnext_gocardless_bank *.csv
+recursive-include erpnext_gocardless_bank *.html
+recursive-include erpnext_gocardless_bank *.ico
+recursive-include erpnext_gocardless_bank *.js
+recursive-include erpnext_gocardless_bank *.json
+recursive-include erpnext_gocardless_bank *.md
+recursive-include erpnext_gocardless_bank *.png
+recursive-include erpnext_gocardless_bank *.py
+recursive-include erpnext_gocardless_bank *.svg
+recursive-include erpnext_gocardless_bank *.txt
+recursive-exclude erpnext_gocardless_bank *.pyc
