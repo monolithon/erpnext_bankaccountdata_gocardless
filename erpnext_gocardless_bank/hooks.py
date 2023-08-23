@@ -17,6 +17,9 @@ app_email = "kid1194@gmail.com"
 app_license = "MIT"
 
 
+required_apps = ["erpnext"]
+
+
 is_frappe_above_v13 = int(frappe_version.split('.')[0]) > 13
 
 
