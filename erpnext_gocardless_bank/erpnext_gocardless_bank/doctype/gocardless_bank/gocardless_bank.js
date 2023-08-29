@@ -42,6 +42,7 @@ frappe.ui.form.on('Gocardless Bank', {
         frm._form_disabled = false;
         frm._gocardless_setup = false;
         frm._gocardless_disabled = false;
+        frm._company_country = null;
         frm._banks = {key: '', list: {}, cache: {}};
         frm._bank_accounts_loading_key = 'gocardless_loading_accounts_ts';
         frm._bank_accounts_loading_timeout = 5;
@@ -62,11 +63,22 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     company: function(frm) {
         if (frm._form_disabled) return;
-        if (!cstr(frm.doc.company).length || cstr(frm.doc.country).length) return;
+        if (
+            !cstr(frm.doc.company).length
+            || (
+                cstr(frm.doc.country).length && frm._company_country
+                && frm._company_country[frm.doc.company] === frm.doc.country
+            )
+        ) return;
+        frm.toggle_enable('country', true);
+        frm._company_country = {};
         frappe.db.get_value('Company', frm.doc.company, 'country')
         .then(function(ret) {
             if (ret && $.isPlainObject(ret)) ret = ret.message || ret;
-            if (typeof ret === 'string') frm.set_value('country', ret);
+            if (typeof ret === 'string') {
+                frm._company_country[frm.doc.company] = ret;
+                frm.set_value('country', ret);
+            }
         });
     },
     country: function(frm) {
@@ -110,7 +122,11 @@ frappe.ui.form.on('Gocardless Bank', {
         if (cint(frm.doc.disabled)) {
             if (!frm._form_disabled) {
                 frm._form_disabled = true;
-                frm.disable_form();
+                frm.fields.forEach(function(field) {
+				    frm.set_df_property(field.df.fieldname, 'read_only', '1');
+			    });
+		        frm.disable_save();
+                frm.toggle_enable('disabled', true);
                 frm.set_intro(__('Gocardless bank is disabled.'), 'red');
             }
             return;
@@ -136,6 +152,11 @@ frappe.ui.form.on('Gocardless Bank', {
         if (frm._form_disabled) {
             if (!cint(frm.doc.disabled)) {
                 frm._form_disabled = false;
+                frm.fields.forEach(function(field) {
+    			    frm.set_df_property(field.df.fieldname, 'read_only', '0');
+    		    });
+    	        frm.enable_save();
+                frm.set_intro();
                 frm.refresh();
             }
             return;

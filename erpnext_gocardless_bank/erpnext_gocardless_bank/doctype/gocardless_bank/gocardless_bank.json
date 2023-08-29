@@ -95,7 +95,6 @@
    "fieldtype": "Link",
    "label": "Country",
    "options": "Country",
-   "fetch_from": "company.country",
    "read_only_depends_on": "!doc.__islocal || !doc.company",
    "set_once": 1,
    "ignore_user_permissions": 1
@@ -151,7 +150,7 @@
    "fieldname": "auth_status",
    "fieldtype": "Select",
    "label": "Auth Status",
-   "otpions": "Unlinked\nLinked",
+   "options": "Unlinked\nLinked",
    "default": "Unlinked",
    "depends_on": "eval:!doc.__islocal",
    "read_only": 1
