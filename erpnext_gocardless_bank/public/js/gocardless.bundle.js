@@ -180,7 +180,7 @@ frappe.Gocardless = class Gocardless {
                     this.error('The bank link received is invalid.');
                     return;
                 }
-                res.access_valid_for_days = cint(res.access_valid_for_days || 90);
+                res.access_valid_for_days = cint(res.access_valid_for_days || 180);
                 
                 this._bank_link[key] = res;
                 this._bank_link[key].reference_id = reference_id;

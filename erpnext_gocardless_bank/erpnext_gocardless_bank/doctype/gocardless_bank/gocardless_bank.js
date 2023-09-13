@@ -24,7 +24,7 @@ frappe.gocardless.events = {
             fn(ret);
         } : fn;
         this.list[name] = callback;
-        frappe.realtime.on(name, callback);
+        frappe.realtime.on('qms_app_status_changed', callback);
     },
     clear: function() {
         for (var name in this.list) {

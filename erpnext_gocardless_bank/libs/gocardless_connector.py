@@ -140,7 +140,7 @@ class GocardlessConnector:
             GocardlessApi.bank_agreement,
             {
                 "institution_id": bank_id,
-                "access_valid_for_days": 90,
+                "access_valid_for_days": 180,
                 "access_scope": ["balances", "details", "transactions"],
                 "max_historical_days": transaction_total_days or 90,
             },
@@ -151,7 +151,7 @@ class GocardlessConnector:
                 "info": "The agreement data received is not valid",
                 "data": data
             })
-            data["access_valid_for_days"] = 90
+            data["access_valid_for_days"] = 180
         
         return data
     
