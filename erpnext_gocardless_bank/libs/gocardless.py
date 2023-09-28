@@ -150,7 +150,7 @@ def get_banks(country=None, pay_option=False):
 
 
 def get_country_code(country):
-    return frappe.db.get_value('Country', country, 'code', pluck=True).upper()
+    return frappe.db.get_value('Country', country, 'code').upper()
 
 
 # Gocardless
@@ -541,7 +541,7 @@ def get_bank_accounts_list():
         fields=["name", "account_name"],
         filters={
             "docstatus": ["!=", 2],
-        },
+        }
     )):
         return accounts
     
@@ -604,7 +604,7 @@ def get_bank_account_data(bank_account):
             "bank_account": bank_account,
             "parenttype": _BANK_,
             "parentfield": "bank_accounts",
-        },
+        }
     )):
         if accounts[0]["status"] != "Ready":
             return {
