@@ -21,6 +21,7 @@ from frappe.utils import (
     DATETIME_FORMAT
 )
 
+from erpnext_gocardless_bank import __frappe_version_min_15__
 from .gocardless_common import (
     error,
     log_error,
@@ -182,28 +183,50 @@ def save_bank_link(name, auth_id, auth_expiry):
 
 # Gocardless Bank
 def enqueue_save_bank(docname, bank, auth_id):
-    frappe.enqueue(
-        "erpnext_gocardless_bank.libs.gocardless.save_bank",
-        job_name=f"gocardless-save-bank-{bank}",
-        is_async=True,
-        enqueue_after_commit=False,
-        docname=docname,
-        bank=bank,
-        auth_id=auth_id
-    )
+    if __frappe_version_min_15__:
+        frappe.enqueue(
+            "erpnext_gocardless_bank.libs.gocardless.save_bank",
+            job_id=f"gocardless-save-bank-{bank}",
+            is_async=True,
+            enqueue_after_commit=False,
+            docname=docname,
+            bank=bank,
+            auth_id=auth_id
+        )
+    else:
+        frappe.enqueue(
+            "erpnext_gocardless_bank.libs.gocardless.save_bank",
+            job_name=f"gocardless-save-bank-{bank}",
+            is_async=True,
+            enqueue_after_commit=False,
+            docname=docname,
+            bank=bank,
+            auth_id=auth_id
+        )
 
 
 # Gocardless Bank
 def enqueue_update_bank(docname, bank, auth_id):
-    frappe.enqueue(
-        "erpnext_gocardless_bank.libs.gocardless.update_bank",
-        job_name=f"gocardless-update-bank-{bank}",
-        is_async=True,
-        enqueue_after_commit=False,
-        docname=docname,
-        bank=bank,
-        auth_id=auth_id
-    )
+    if __frappe_version_min_15__:
+        frappe.enqueue(
+            "erpnext_gocardless_bank.libs.gocardless.update_bank",
+            job_id=f"gocardless-update-bank-{bank}",
+            is_async=True,
+            enqueue_after_commit=False,
+            docname=docname,
+            bank=bank,
+            auth_id=auth_id
+        )
+    else:
+        frappe.enqueue(
+            "erpnext_gocardless_bank.libs.gocardless.update_bank",
+            job_name=f"gocardless-update-bank-{bank}",
+            is_async=True,
+            enqueue_after_commit=False,
+            docname=docname,
+            bank=bank,
+            auth_id=auth_id
+        )
 
 
 # Internal
@@ -979,25 +1002,47 @@ def sync_bank_account(
         "The sync transactions for the bank account {0} of {1} has been queued."
     ).format(account, account_bank))
     
-    frappe.enqueue(
-        "erpnext_gocardless_bank.libs.gocardless.sync_bank_account_transactions",
-        job_name="gocardless-sync-bank-account-transactions-" + account,
-        queue="long",
-        is_async=True,
-        enqueue_after_commit=False,
-        settings=settings,
-        client=client,
-        sync_id=uuid.uuid4(),
-        bank=bank,
-        acc_bank=account_bank,
-        trigger=trigger,
-        account_name=account_name,
-        account=account,
-        account_id=account_id,
-        bank_account=bank_account,
-        date_from=date_from,
-        date_to=date_to
-    )
+    if __frappe_version_min_15__:
+        frappe.enqueue(
+            "erpnext_gocardless_bank.libs.gocardless.sync_bank_account_transactions",
+            job_id="gocardless-sync-bank-account-transactions-" + account,
+            queue="long",
+            is_async=True,
+            enqueue_after_commit=False,
+            settings=settings,
+            client=client,
+            sync_id=uuid.uuid4(),
+            bank=bank,
+            acc_bank=account_bank,
+            trigger=trigger,
+            account_name=account_name,
+            account=account,
+            account_id=account_id,
+            bank_account=bank_account,
+            date_from=date_from,
+            date_to=date_to
+        )
+    else:
+        frappe.enqueue(
+            "erpnext_gocardless_bank.libs.gocardless.sync_bank_account_transactions",
+            job_name="gocardless-sync-bank-account-transactions-" + account,
+            queue="long",
+            is_async=True,
+            enqueue_after_commit=False,
+            settings=settings,
+            client=client,
+            sync_id=uuid.uuid4(),
+            bank=bank,
+            acc_bank=account_bank,
+            trigger=trigger,
+            account_name=account_name,
+            account=account,
+            account_id=account_id,
+            bank_account=bank_account,
+            date_from=date_from,
+            date_to=date_to
+        )
+    
     return 1
 
 

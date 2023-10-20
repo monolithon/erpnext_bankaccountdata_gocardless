@@ -4,7 +4,7 @@
 # Licence: Please refer to LICENSE file
 
 
-from frappe import __version__ as frappe_version
+from . import __frappe_version_min_14__
 
 
 app_name = "erpnext_gocardless_bank"
@@ -20,12 +20,9 @@ app_license = "MIT"
 required_apps = ["erpnext"]
 
 
-is_frappe_above_v13 = int(frappe_version.split('.')[0]) > 13
-
-
 app_include_js = [
     "gocardless.bundle.js"
-] if is_frappe_above_v13 else [
+] if __frappe_version_min_14__ else [
     "/assets/erpnext_gocardless_bank/js/gocardless.bundle.js"
 ]
 
