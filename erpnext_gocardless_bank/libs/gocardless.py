@@ -21,7 +21,7 @@ from frappe.utils import (
     DATETIME_FORMAT
 )
 
-from erpnext_gocardless_bank import __frappe_version_min_15__
+from erpnext_gocardless_bank.version import __frappe_version_min_15__
 from .gocardless_common import (
     error,
     log_error,
