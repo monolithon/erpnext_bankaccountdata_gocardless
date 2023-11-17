@@ -675,10 +675,10 @@ def enqueue_bank_account_sync(bank, account, from_date=None, to_date=None):
     data = accounts[account]
     if from_date or to_date:
         if from_date:
-            from_date = reformat_date(from_date)
+            from_date = reformat_date(from_date, True)
         
         if to_date:
-            to_date = reformat_date(to_date)
+            to_date = reformat_date(to_date, True)
         
         if not from_date and to_date:
             from_date = add_to_date(
@@ -930,14 +930,27 @@ def sync_bank(name, trigger):
 
 
 # Internal
-def reformat_date(date: str):
+def reformat_date(date: str, def_none=False):
     try:
-        return formatdate(date, DATE_FORMAT)
+        formatted_date = formatdate(date, DATE_FORMAT)
     except Exception:
+        formatted_date = None
+    
+    if not formatted_date:
         try:
-            return getdate(date).strftime(DATE_FORMAT)
+            formatted_date = getdate(date);
+            if formatted_date:
+                formatted_date = formatted_date.strftime(DATE_FORMAT)
         except Exception:
-            return date
+            formatted_date = None
+    
+    if formatted_date:
+        return formatted_date
+    
+    if def_none:
+        return None
+    
+    return datetime.utcnow().strftime(DATE_FORMAT)
 
 
 # Internal

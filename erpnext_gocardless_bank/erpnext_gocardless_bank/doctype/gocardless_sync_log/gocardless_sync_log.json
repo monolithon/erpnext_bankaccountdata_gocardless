@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_copy": 1,
- "autoname": "format:NAS-{YYYY}-{MM}-{DD}-{#####}",
+ "autoname": "format:GSL-{YYYY}-{MM}-{DD}-{#####}",
  "creation": "2022-04-04 04:04:04.119400",
  "description": "Gocardless banks sync log",
  "doctype": "DocType",
