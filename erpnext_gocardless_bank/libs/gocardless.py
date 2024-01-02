@@ -1251,14 +1251,13 @@ def new_bank_transaction(
         if settings.ignore_transactions_without_enabled_currency:
             return 0
     
-    debit = 0
-    credit = 0
-    if "amount" in data:
-        data["amount"] = flt(data["amount"])
-        if data["amount"] >= 0:
-            debit = data["amount"]
-        else:
-            credit = abs(data["amount"])
+    data["amount"] = flt(data["amount"])
+    if data["amount"] >= 0:
+        debit = abs(data["amount"])
+        credit = 0
+    else:
+        debit = 0
+        credit = abs(data["amount"])
     
     status = "Pending" if status == "pending" else "Settled"
     dt = "Bank Transaction"

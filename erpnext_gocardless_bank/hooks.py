@@ -46,3 +46,6 @@ scheduler_events = {
         ],
     }
 }
+
+
+required_apps = ["erpnext"]
