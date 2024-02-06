@@ -53,7 +53,14 @@ def _add_link_to_workspace():
     keys = ["Gocardless Settings", "Gocardless Bank", "Gocardless Sync Log"]
     
     for v in doc.links:
-        if v.type == "Link" and v.label in keys:
+        if (
+            v.type == "Link" and (
+                v.label in keys or (
+                    v.link_to == "Mpesa Settings" and
+                    not frappe.db.exists("DocType", v.link_to)
+                )
+            )
+        ):
             try:
                 doc.links.remove(v)
             except Exception:
