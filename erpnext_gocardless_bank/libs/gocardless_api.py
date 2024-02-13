@@ -8,7 +8,7 @@ from .gocardless_common import to_json, to_pretty_json
 
 
 class GocardlessApi:
-    url = "https://ob.gocardless.com/api/v2/"
+    url = "https://bankaccountdata.gocardless.com/api/v2/"
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json"
