@@ -18,8 +18,8 @@ A plugin that integrates Gocardless open banking services with ERPNext.
 
 ### Requirements
 
-- Frappe >= v14.0.0
-- ERPNext >= v14.0.0
+- Frappe >= v15.0.0
+- ERPNext >= v15.0.0
 
 ---
 
