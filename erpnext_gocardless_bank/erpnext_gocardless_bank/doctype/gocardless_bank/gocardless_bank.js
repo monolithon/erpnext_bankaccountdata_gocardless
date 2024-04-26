@@ -296,11 +296,11 @@ frappe.ui.form.on('Gocardless Bank', {
                 
                 let data = [],
                 cache = [];
-                ret.forEach(function(v) {
-                    let row = Object.assign({}, v);
-                    cache.push(row);
+                for (let i = 0, l = ret.length, v; i < l; i++) {
+                    v = ret[i];
+                    cache.push(Object.assign({}, v));
                     data.push({label: __(v.name), value: v.name});
-                });
+                }
                 frm._banks.key = key;
                 frm._banks.list[key] = data;
                 frm._banks.cache[key] = cache;
