@@ -127,8 +127,7 @@ class GocardlessConnector:
     def refresh(self, refresh_token: str):
         token = self.request(
             GocardlessApi.refresh_token,
-            {"refresh": refresh_token},
-            auth=False
+            {"refresh": refresh_token}
         )
         if not token or not isinstance(token, dict):
             error(_("Unable to refresh Gocardless"), code="RzRRkD3xvD")
