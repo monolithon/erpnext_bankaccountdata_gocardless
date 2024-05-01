@@ -32,7 +32,7 @@ class GocardlessConnector:
             self.secret_id = secret_id
             self.secret_key = secret_key
         elif secret_id and not secret_key:
-            self.token.update({"access": secret_id})
+            self.token["access"] = secret_id
             self.connected = True
     
     
@@ -40,7 +40,7 @@ class GocardlessConnector:
         _url = f"{GocardlessApi.url}{uri}"
         _data = to_json(data) if isinstance(data, dict) else None
         _method = method or ("POST" if _data else "GET")
-        _post = _method == "POST"
+        _post = True if _method == "POST" else False
         _headers = GocardlessApi.headers
         
         if auth or _post:
@@ -98,7 +98,11 @@ class GocardlessConnector:
     
     
     def connect(self):
-        if self.connected or not self.secret_id or not self.secret_key:
+        if self.connected:
+            return None
+        
+        if not self.secret_id or not self.secret_key:
+            error(_("Gocardless secret ID or key is empty"), code="vyGE6QZB23")
             return None
         
         token = self.request(
@@ -112,7 +116,20 @@ class GocardlessConnector:
         if not token or not isinstance(token, dict):
             error(_("Unable to connect to Gocardless"), code="GEgr6QZB23")
             return None
-            
+        
+        if (
+            not token.get("access", "") or
+            not isinstance(token.get("access"), str) or
+            not token.get("access_expires", "") or
+            not isinstance(token.get("access_expires"), (str, int)) or
+            not token.get("refresh", "") or
+            not isinstance(token.get("refresh"), str) or
+            not token.get("refresh_expires", "") or
+            not isinstance(token.get("refresh_expires"), (str, int))
+        ):
+            error(_("Gocardless token received is invalid"), code="n2SpB23MhB")
+            return None
+        
         self.token.update(token)
         self.secret_id = None
         self.secret_key = None
@@ -131,6 +148,15 @@ class GocardlessConnector:
         )
         if not token or not isinstance(token, dict):
             error(_("Unable to refresh Gocardless"), code="RzRRkD3xvD")
+            return None
+        
+        if (
+            not token.get("access", "") or
+            not isinstance(token.get("access"), str) or
+            not token.get("access_expires", "") or
+            not isinstance(token.get("access_expires"), (str, int))
+        ):
+            error(_("Gocardless refreshed token received is invalid"), code="B23Mhn2SpB")
             return None
         
         self.token.update(token)
