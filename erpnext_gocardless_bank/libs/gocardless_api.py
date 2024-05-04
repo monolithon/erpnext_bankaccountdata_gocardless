@@ -140,7 +140,7 @@ class GocardlessApi:
     def prepare_transactions(transactions):
         for entry in transactions:
             info = {}
-            for k in entry.keys():
+            for k in list(entry):
                 ek = "main"
                 if k in GocardlessApi.transactions[ek]:
                     entry[GocardlessApi.transactions[ek][k]] = entry.pop(k)

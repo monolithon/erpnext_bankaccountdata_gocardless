@@ -103,18 +103,18 @@ def is_enabled():
 def get_client():
     doc = get_doc()
     now_dt = datetime.utcnow()
+    client = GocardlessConnector()
     if doc.access_token and get_datetime(doc.access_expiry) > now_dt:
-        return GocardlessConnector(doc.access_token)
+        client.set_access(doc.access_token)
+        return client
     
     if doc.refresh_token and get_datetime(doc.refresh_expiry) > now_dt:
-        client = GocardlessConnector()
         client.refresh(doc.refresh_token)
     else:
-        client = GocardlessConnector(doc.secret_id, doc.secret_key)
+        client.connect(doc.secret_id, doc.secret_key)
     
     doc = get_doc(True)
     access = client.get_access()
-    
     if "refresh" in access:
         doc.refresh_token = access["refresh"]
         doc.refresh_expiry = add_to_date(
@@ -132,7 +132,6 @@ def get_client():
         as_datetime=True
     )
     doc.save(ignore_permissions=True)
-    
     return client
 
 

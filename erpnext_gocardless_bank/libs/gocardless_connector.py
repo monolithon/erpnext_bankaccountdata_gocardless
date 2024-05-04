@@ -23,29 +23,67 @@ from .gocardless_common import (
 
 
 class GocardlessConnector:
-    def __init__(self, secret_id=None, secret_key=None):
-        self.secret_id = None
-        self.secret_key = None
+    def __init__(self):
         self.token = {}
-        self.connected = False
-        if secret_id and secret_key:
-            self.secret_id = secret_id
-            self.secret_key = secret_key
-        elif secret_id and not secret_key:
-            self.token["access"] = secret_id
-            self.connected = True
     
     
-    def request(self, uri, data=None, auth=True, is_list=False, method=None):
-        _url = f"{GocardlessApi.url}{uri}"
+    def connect(self, secret_id, secret_key):
+        if (
+            not secret_id or not isinstance(secret_id, str) or
+            not secret_key or not isinstance(secret_key, str)
+        ):
+            error(_("Gocardless secret id or key is invalid."), code="vyGE6QZB23")
+            return None
+        
+        token = self._request(
+            GocardlessApi.new_token,
+            {
+                "secret_id": secret_id,
+                "secret_key": secret_key
+            },
+            auth=False
+        )
+        if not token or not isinstance(token, dict):
+            error(_("Unable to connect to Gocardless"), code="GEgr6QZB23")
+            return None
+        
+        if (
+            not token.get("access", "") or
+            not isinstance(token.get("access"), str) or
+            not token.get("access_expires", "") or
+            not isinstance(token.get("access_expires"), (str, int)) or
+            not token.get("refresh", "") or
+            not isinstance(token.get("refresh"), str) or
+            not token.get("refresh_expires", "") or
+            not isinstance(token.get("refresh_expires"), (str, int))
+        ):
+            error(_("Gocardless access token received is invalid"), code="n2SpB23MhB")
+            return None
+        
+        self.token.update(token)
+    
+    
+    def set_access(self, access_token):
+        if not access_token or not isinstance(access_token, str):
+            error(_("Gocardless access token is invalid."), code="pBhn2SB23M")
+        
+        self.token["access"] = access_token
+    
+    
+    def get_access(self):
+        return self.token
+    
+    
+    def _request(self, uri, data=None, auth=True, is_list=False, method=None):
+        _url = GocardlessApi.url + uri
         _data = to_json(data) if isinstance(data, dict) else None
         _method = method or ("POST" if _data else "GET")
         _post = True if _method == "POST" else False
         _headers = GocardlessApi.headers
         
         if auth or _post:
-            if auth and (not self.connected or not self.token):
-                error(_("The connector token is invalid."), code="c6EecdXJtY")
+            if auth and not self.token:
+                error(_("Gocardless access token is missing."), code="c6EecdXJtY")
                 return None
             
             _headers = _headers.copy()
@@ -60,7 +98,7 @@ class GocardlessConnector:
                 "url": _url,
                 "method": _method,
                 "data": _data,
-                "headers": _headers,
+                "headers": _headers
             }
             if exc:
                 log["exception"] = str(exc)
@@ -80,8 +118,8 @@ class GocardlessConnector:
         response = parse_json(response)
         
         if status_code != 200 and status_code != 201:
-            log_error(response)
             err = GocardlessApi.parse_error(response)
+            log_error({"error": err, "data": response})
             if "list" not in err:
                 error(err, False, "Me84LVAWHe")
             return err
@@ -91,63 +129,24 @@ class GocardlessConnector:
             (is_list and not isinstance(response, list))
         ):
             report_error()
-            error(_("The response received from api is invalid."), code="qFH28egKy9")
+            error(_("Gocardless API response received is invalid."), code="qFH28egKy9")
             return None
         
         return response
     
     
-    def connect(self):
-        if self.connected:
+    def refresh(self, refresh_token):
+        if not refresh_token or not isinstance(refresh_token, str):
+            error(_("Gocardless refresh token is invalid."), code="Pn6P64PVnS")
             return None
         
-        if not self.secret_id or not self.secret_key:
-            error(_("Gocardless secret ID or key is empty"), code="vyGE6QZB23")
-            return None
-        
-        token = self.request(
-            GocardlessApi.new_token,
-            {
-                "secret_id": self.secret_id,
-                "secret_key": self.secret_key
-            },
+        token = self._request(
+            GocardlessApi.refresh_token,
+            {"refresh": refresh_token},
             auth=False
         )
         if not token or not isinstance(token, dict):
-            error(_("Unable to connect to Gocardless"), code="GEgr6QZB23")
-            return None
-        
-        if (
-            not token.get("access", "") or
-            not isinstance(token.get("access"), str) or
-            not token.get("access_expires", "") or
-            not isinstance(token.get("access_expires"), (str, int)) or
-            not token.get("refresh", "") or
-            not isinstance(token.get("refresh"), str) or
-            not token.get("refresh_expires", "") or
-            not isinstance(token.get("refresh_expires"), (str, int))
-        ):
-            error(_("Gocardless token received is invalid"), code="n2SpB23MhB")
-            return None
-        
-        self.token.update(token)
-        self.secret_id = None
-        self.secret_key = None
-        self.connected = True
-    
-    
-    def get_access(self):
-        self.connect()
-        return self.token
-    
-    
-    def refresh(self, refresh_token: str):
-        token = self.request(
-            GocardlessApi.refresh_token,
-            {"refresh": refresh_token}
-        )
-        if not token or not isinstance(token, dict):
-            error(_("Unable to refresh Gocardless"), code="RzRRkD3xvD")
+            error(_("Unable to refresh Gocardless access token."), code="RzRRkD3xvD")
             return None
         
         if (
@@ -156,24 +155,21 @@ class GocardlessConnector:
             not token.get("access_expires", "") or
             not isinstance(token.get("access_expires"), (str, int))
         ):
-            error(_("Gocardless refreshed token received is invalid"), code="B23Mhn2SpB")
+            error(_("Gocardless refreshed access token received is invalid"), code="B23Mhn2SpB")
             return None
         
         self.token.update(token)
-        self.connected = True
     
     
     def get_banks(self, country=None, pay_option=False):
-        self.connect()
-        return self.request(
+        return self._request(
             GocardlessApi.list_banks(country, pay_option),
             is_list=True
         )
     
     
     def get_bank_agreement(self, bank_id, transaction_total_days):
-        self.connect()
-        data = self.request(
+        data = self._request(
             GocardlessApi.bank_agreement,
             {
                 "institution_id": bank_id,
@@ -184,7 +180,7 @@ class GocardlessConnector:
         )
         if "access_valid_for_days" not in data:
             log_info({
-                "info": "The agreement data received is not valid",
+                "info": "Bank agreement data received is not valid",
                 "data": data
             })
             data["access_valid_for_days"] = 180
@@ -213,7 +209,7 @@ class GocardlessConnector:
         if docname:
             redirect_url = f"{redirect_url}/{docname}"
         
-        data = self.request(
+        data = self._request(
             GocardlessApi.bank_link,
             {
                 "institution_id": bank_id,
@@ -231,38 +227,37 @@ class GocardlessConnector:
     
     
     def remove_bank_link(self, auth_id):
-        self.connect()
-        return self.request(GocardlessApi.bank_accounts(auth_id), method="DELETE")
+        return self._request(GocardlessApi.bank_accounts(auth_id), method="DELETE")
     
     
     def get_accounts(self, auth_id):
-        self.connect()
-        data = self.request(GocardlessApi.bank_accounts(auth_id))
+        data = self._request(GocardlessApi.bank_accounts(auth_id))
         if "error" in data:
             return data
         
         if "accounts" not in data:
-            log_error(data)
-            error(_("The requisition received have no bank accounts."), code="n2Sp9b7MhB")
+            err = _("Bank requisition data received has no bank accounts.")
+            log_error({"error": err, "data": data})
+            error(err, code="n2Sp9b7MhB")
             return []
         
         accounts = parse_json(data["accounts"])
-        
         if not isinstance(accounts, list):
-            log_error(data)
-            error(_("The bank accounts received from requisition is invalid."), code="u6wMBMwkdZ")
+            err = _("Bank accounts data received from requisition is invalid.")
+            log_error({"error": err, "data": data})
+            error(err, code="u6wMBMwkdZ")
             accounts = []
         
         elif not accounts:
-            log_error(data)
-            error(_("The bank accounts received from requisition is empty."), code="P664PnPVnS")
+            err = _("Bank accounts data received from requisition is empty.")
+            log_error({"error": err, "data": data})
+            error(err, code="P664PnPVnS")
         
         return accounts
     
     
     def get_account_data(self, account_id):
-        self.connect()
-        data = self.request(GocardlessApi.account_data(account_id))
+        data = self._request(GocardlessApi.account_data(account_id))
         if "error" in data:
             return data
         
@@ -289,27 +284,34 @@ class GocardlessConnector:
     
     
     def get_account_balances(self, account_id):
-        self.connect()
-        data = self.request(GocardlessApi.account_balances(account_id))
+        data = self._request(GocardlessApi.account_balances(account_id))
         if "error" in data:
             return data
         
         balances = []
         if "balances" not in data:
-            log_error(data)
-            error(_(
-                "The bank account balances received for {0} has no data."
-            ).format(account_id), code="gcJf2neHNY")
+            err = _(
+                "Bank account data received for {0} has no balances."
+            ).format(account_id)
+            log_error({"error": err, "data": data})
+            error(err, code="gcJf2neHNY")
             return balances
         
         balances_data = parse_json(data["balances"])
-        if not balances_data or not isinstance(balances_data, list):
-            log_error(data)
-            if not balances_data:
-                err =  _("The bank account balances received for {0} is empty.")
-            else:
-                err = _("The bank account balances received for {0} is invalid.")
-            error(err.format(account_id), code="rWKYwfNA8A")
+        if not isinstance(balances_data, list):
+            err = _(
+                "Bank account balances received for {0} is invalid."
+            ).format(account_id)
+            log_error({"error": err, "data": data})
+            error(err, code="rWKYwfNA8A")
+            return balances
+        
+        if not balances_data:
+            err = _(
+                "Bank account balances received for {0} is empty."
+            ).format(account_id)
+            log_error({"error": err, "data": data})
+            error(err, code="YwfNArWK8A")
             return balances
         
         for bal in balances_data:
@@ -320,8 +322,9 @@ class GocardlessConnector:
                 or "amount" not in bal["balanceAmount"]
                 or "currency" not in bal["balanceAmount"]
             ):
-                log_error(data)
-                error(_("The bank account balances received is invalid."), code="2nmCTc8rKL")
+                err = _("Bank account balances data received is invalid.")
+                log_error({"error": err, "data": data})
+                error(err, code="2nmCTc8rKL")
                 if balances:
                     balances.clear()
                 break
@@ -337,33 +340,33 @@ class GocardlessConnector:
     
     
     def get_account_details(self, account_id):
-        self.connect()
-        data = self.request(GocardlessApi.account_details(account_id))
+        data = self._request(GocardlessApi.account_details(account_id))
         if "error" in data:
             return data
         
         if "account" not in data:
-            log_error(data)
-            error(_("The bank account details received has no data."), code="re5UK56vVf")
+            err = _("Bank account details received has no data.")
+            log_error({"error": err, "data": data})
+            error(err, code="re5UK56vVf")
             return {}
         
         details = parse_json(data["account"])
         if not isinstance(details, dict):
-            details = {}
-        if not details:
-            log_error(data)
-            if not details:
-                err =  _("The bank account details received is empty.")
-            else:
-                err = _("The bank account details received is invalid.")
+            err = _("Bank account details received is invalid.")
+            log_error({"error": err, "data": data})
             error(err, code="AGgdGAFn7W")
+            details = {}
+        
+        if not details:
+            err = _("Bank account details received is empty.")
+            log_error({"error": err, "data": data})
+            error(err, code="GAdAGgFn7W")
         
         return details
     
     
     def get_account_transactions(self, account_id, date_from, date_to):
-        self.connect()
-        data = self.request(
+        data = self._request(
             GocardlessApi.account_transactions(account_id, date_from, date_to)
         )
         
@@ -378,23 +381,33 @@ class GocardlessConnector:
             return data
         
         if "transactions" not in data:
-            log_error(data)
-            error(_(
-                "The bank account transactions received for {0} has no data."
-            ).format(account_id), code="wnq5Z8rKHn")
+            err = _(
+                "Bank account transactions received for {0} has no data."
+            ).format(account_id)
+            log_error({"error": err, "data": data})
+            error(err, code="wnq5Z8rKHn")
             return None
         
         data = parse_json(data["transactions"])
-        if not data or not isinstance(data, dict):
-            log_error(data)
-            error(_(
-                "The bank account transactions received for {0} is invalid."
-            ).format(account_id), code="mD5GFRngsW")
+        if not isinstance(data, dict):
+            err = _(
+                "Bank account transactions received for {0} is invalid."
+            ).format(account_id)
+            log_error({"error": err, "data": data})
+            error(err, code="mD5GFRngsW")
             return None
         
-        if not data.get("booked", None) and not data.get("pending", None):
+        if not data:
             err = _(
-                "The bank account transactions received for {0} is empty."
+                "Bank account transactions received for {0} is empty."
+            ).format(account_id)
+            log_error({"error": err, "data": data})
+            error(err, code="gsWmD5GFRn")
+            return None
+        
+        if not data.get("booked", "") and not data.get("pending", ""):
+            err = _(
+                "Bank account transactions received for {0} has no booked and pending data."
             ).format(account_id)
             log_error({"error": err, "data": data})
             error(err, False, "5ZMs5EQK37")
