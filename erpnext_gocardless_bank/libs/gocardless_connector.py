@@ -44,7 +44,7 @@ class GocardlessConnector:
             auth=False
         )
         if not token or not isinstance(token, dict):
-            error(_("Unable to connect to Gocardless"), code="GEgr6QZB23")
+            error(_("Unable to connect to Gocardless."), code="GEgr6QZB23")
             return None
         
         if (
@@ -57,7 +57,7 @@ class GocardlessConnector:
             not token.get("refresh_expires", "") or
             not isinstance(token.get("refresh_expires"), (str, int))
         ):
-            error(_("Gocardless access token received is invalid"), code="n2SpB23MhB")
+            error(_("Gocardless access token received is invalid."), code="n2SpB23MhB")
             return None
         
         self.token.update(token)
@@ -75,7 +75,7 @@ class GocardlessConnector:
     
     
     def _request(self, uri, data=None, auth=True, is_list=False, method=None):
-        _url = GocardlessApi.url + uri
+        _url = f"{GocardlessApi.url}{uri}"
         _data = to_json(data) if isinstance(data, dict) else None
         _method = method or ("POST" if _data else "GET")
         _post = True if _method == "POST" else False
@@ -155,7 +155,7 @@ class GocardlessConnector:
             not token.get("access_expires", "") or
             not isinstance(token.get("access_expires"), (str, int))
         ):
-            error(_("Gocardless refreshed access token received is invalid"), code="B23Mhn2SpB")
+            error(_("Gocardless refreshed access token received is invalid."), code="B23Mhn2SpB")
             return None
         
         self.token.update(token)
@@ -290,26 +290,20 @@ class GocardlessConnector:
         
         balances = []
         if "balances" not in data:
-            err = _(
-                "Bank account data received for {0} has no balances."
-            ).format(account_id)
+            err = _("Bank account data received for {0} has no balances.").format(account_id)
             log_error({"error": err, "data": data})
             error(err, code="gcJf2neHNY")
             return balances
         
         balances_data = parse_json(data["balances"])
         if not isinstance(balances_data, list):
-            err = _(
-                "Bank account balances received for {0} is invalid."
-            ).format(account_id)
+            err = _("Bank account balances received for {0} is invalid.").format(account_id)
             log_error({"error": err, "data": data})
             error(err, code="rWKYwfNA8A")
             return balances
         
         if not balances_data:
-            err = _(
-                "Bank account balances received for {0} is empty."
-            ).format(account_id)
+            err = _("Bank account balances received for {0} is empty.").format(account_id)
             log_error({"error": err, "data": data})
             error(err, code="YwfNArWK8A")
             return balances
@@ -381,34 +375,26 @@ class GocardlessConnector:
             return data
         
         if "transactions" not in data:
-            err = _(
-                "Bank account transactions received for {0} has no data."
-            ).format(account_id)
+            err = _("Bank account transactions received for {0} has no data.").format(account_id)
             log_error({"error": err, "data": data})
             error(err, code="wnq5Z8rKHn")
             return None
         
         data = parse_json(data["transactions"])
         if not isinstance(data, dict):
-            err = _(
-                "Bank account transactions received for {0} is invalid."
-            ).format(account_id)
+            err = _("Bank account transactions received for {0} is invalid.").format(account_id)
             log_error({"error": err, "data": data})
             error(err, code="mD5GFRngsW")
             return None
         
         if not data:
-            err = _(
-                "Bank account transactions received for {0} is empty."
-            ).format(account_id)
+            err = _("Bank account transactions received for {0} is empty.").format(account_id)
             log_error({"error": err, "data": data})
             error(err, code="gsWmD5GFRn")
             return None
         
         if not data.get("booked", "") and not data.get("pending", ""):
-            err = _(
-                "Bank account transactions received for {0} has no booked and pending data."
-            ).format(account_id)
+            err = _("Bank account transactions received for {0} has no booked and pending data.").format(account_id)
             log_error({"error": err, "data": data})
             error(err, False, "5ZMs5EQK37")
             return None
