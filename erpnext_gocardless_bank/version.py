@@ -1,12 +1,21 @@
-# ERPNext ERPNext Gocardless Bank © 2023
+# ERPNext Gocardless Bank © 2024
 # Author:  Ameen Ahmed
 # Company: Level Up Marketing & Software Development Services
 # Licence: Please refer to LICENSE file
 
 
-from frappe import __version__ as frappe_version
+from frappe import __version__
 
 
-__frappe_version__ = int(frappe_version.split(".")[0])
-__frappe_version_min_15__ = __frappe_version__ > 14
-__frappe_version_min_14__ = __frappe_version__ > 13
+# [Internal]
+__frappe_version__ = int(__version__.split(".")[0])
+
+
+# [Background]
+def is_version_gt(num: int):
+    return __frappe_version__ > num
+
+
+# [Common]
+def is_version_lt(num: int):
+    return __frappe_version__ < num

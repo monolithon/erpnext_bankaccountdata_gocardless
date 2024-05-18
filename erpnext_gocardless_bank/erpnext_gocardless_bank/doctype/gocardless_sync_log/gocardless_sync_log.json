@@ -1,5 +1,4 @@
 {
- "actions": [],
  "allow_copy": 1,
  "autoname": "format:GSL-{YYYY}-{MM}-{DD}-{#####}",
  "creation": "2022-04-04 04:04:04.119400",
@@ -77,8 +76,7 @@
   }
  ],
  "icon": "fa fa-log",
- "links": [],
- "modified": "2022-04-04 04:04:04.119400",
+ "modified": "2024-05-12 04:04:04",
  "modified_by": "Administrator",
  "module": "ERPNext Gocardless Bank",
  "name": "Gocardless Sync Log",
@@ -121,7 +119,5 @@
   }
  ],
  "sort_field": "modified",
- "sort_order": "DESC",
- "states": [],
- "track_changes": 1
+ "sort_order": "DESC"
 }

@@ -1,61 +1,41 @@
-# ERPNext Gocardless Bank © 2023
+# ERPNext Gocardless Bank © 2024
 # Author:  Ameen Ahmed
 # Company: Level Up Marketing & Software Development Services
 # Licence: Please refer to LICENSE file
 
 
 import frappe
-from frappe import _
-from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
-
-from erpnext_gocardless_bank.libs.gocardless import clear_sync_cache
 
 
-def after_install():
-    clear_sync_cache()
-    _create_custom_fields()
-    _add_link_to_workspace()
+# [Hooks]
+def before_install():
+    from erpnext_gocardless_bank import __production__
+    
+    if not __production__:
+        from .uninstall import after_uninstall
+        
+        after_uninstall()
+    else:
+        frappe.clear_cache()
 
 
-def _create_custom_fields():
-    create_custom_fields({
-        "Bank Transaction": [
-            {
-                "label": _("Gocardless Information"),
-                "fieldname": "gocardless_transaction_info",
-                "fieldtype": "Long Text",
-                "no_copy": 1,
-                "read_only": 1,
-                "insert_after": "description",
-            }
-        ],
-        "Bank Account": [
-            {
-                "label": _("Bank Account No"),
-                "fieldname": "gocardless_bank_account_no",
-                "fieldtype": "Data",
-                "hidden": 1,
-                "no_copy": 1,
-                "read_only": 1,
-                "insert_after": "bank_account_no",
-            }
-        ]
-    })
-
-
-def _add_link_to_workspace():
+# [Hooks]
+def after_sync():
+    from .uninstall import get_doctypes
+    
     dt = "Workspace"
     name = "ERPNext Integrations"
     if not frappe.db.exists(dt, name):
         return 0
-        
-    doc = frappe.get_doc(dt, name)
-    keys = ["Gocardless Settings", "Gocardless Bank", "Gocardless Sync Log"]
     
+    doctypes = get_doctypes()[2:]
+    doctypes = doctypes.reverse()
+    doc = frappe.get_doc(dt, name)
     for v in doc.links:
         if (
             v.type == "Link" and (
-                v.label in keys or (
+                v.link_to in doctypes or
+                (
                     v.link_to == "Mpesa Settings" and
                     not frappe.db.exists("DocType", v.link_to)
                 )
@@ -66,14 +46,14 @@ def _add_link_to_workspace():
             except Exception:
                 pass
     
-    for key in keys:
+    for v in doctypes:
         doc.append("links", {
             "dependencies": "",
             "hidden": 0,
             "is_query_report": 0,
-            "label": key,
+            "label": v,
             "link_count": 0,
-            "link_to": key,
+            "link_to": v,
             "link_type": "DocType",
             "onboard": 0,
             "type": "Link"

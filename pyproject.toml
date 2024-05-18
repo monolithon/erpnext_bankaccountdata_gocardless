@@ -1,7 +1,7 @@
 [project]
 name = "erpnext_gocardless_bank"
 authors = [
-    {name = "Ameen Ahmed (Level Up)", email = "kid1194@gmail.com"}
+    {name = "Ameen Ahmed (Level Up)", email = "levelupye@gmail.com"}
 ]
 description = "Gocardless open banking services integration for ERPNext."
 keywords = ["frappe", "erpnext", "nordigen", "gocardless", "open banking", "integration"]

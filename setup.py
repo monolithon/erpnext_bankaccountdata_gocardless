@@ -1,4 +1,4 @@
-# ERPNext Gocardless Bank © 2023
+# ERPNext Gocardless Bank © 2024
 # Author:  Ameen Ahmed
 # Company: Level Up Marketing & Software Development Services
 # Licence: Please refer to LICENSE file
@@ -17,7 +17,7 @@ setup(
     version=version,
     description='Gocardless open banking services integration for ERPNext.',
     author='Ameen Ahmed (Level Up)',
-    author_email='kid1194@gmail.com',
+    author_email='levelupye@gmail.com',
     packages=find_packages(),
     zip_safe=False,
     include_package_data=True,

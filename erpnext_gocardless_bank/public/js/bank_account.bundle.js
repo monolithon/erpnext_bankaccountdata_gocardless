@@ -1,222 +1,214 @@
 /*
-*  ERPNext Gocardless Bank © 2023
+*  ERPNext Gocardless Bank © 2024
 *  Author:  Ameen Ahmed
 *  Company: Level Up Marketing & Software Development Services
 *  Licence: Please refer to LICENSE file
 */
 
-frappe.gocardless.events = {
-    init: false,
-    list: {},
-    has: function(name) {
-        return this.list[name] != null;
-    },
-    add: function(name, fn, once) {
-        if (this.has(name)) return;
-        if (!this.init) {
-            frappe.socketio.init();
-            this.init = true;
-        }
-        var me = this;
-        let callback = once ? function(ret) {
-            frappe.realtime.off(name, me.list[name]);
-            delete me.list[name];
-            fn(ret);
-        } : fn;
-        this.list[name] = callback;
-        frappe.realtime.on(name, callback);
-    },
-    clear: function() {
-        for (var name in this.list) {
-            frappe.realtime.off(name, this.list[name]);
-            delete this.list[name];
-        }
-    },
-};
+
+if (typeof frappe.gc !== 'function')
+    frappe.require('/assets/erpnext_gocardless_bank/js/gocardless.bundle.js');
 
 
 frappe.ui.form.on('Bank Account', {
-    setup: function(frm) {
-        frm._gocardless_setup = false;
-        frm._gocardless_data = null;
-        frm._gocardless_fields = false;
-        frm._gocardless_toolbar = false;
-        frm._gocardless_btn = null;
+    onload: function(frm) {
+        function gc_init() {
+            if (typeof frappe.gc !== 'function')
+                return setTimeout(gc_init, 500);
+            
+            frm._gc = {};
+            if (frm._gc_refresh) frm.events.gc_check_status(frm);
+        }
+        gc_init();
     },
     refresh: function(frm) {
-        if (frm.doc.__needs_refresh) {
-            frappe.gocardless.events.clear();
-            frm.reload_doc();
-        } else frm.trigger('check_status');
+        if (frm.doc.__needs_refresh) return frm.reload_doc();
+        if (frm._gc) frm.events.gc_check_status(frm);
+        else if (frm._gc_refresh == null) frm._gc_refresh = 1;
     },
-    check_status: function(frm) {
-        if (frm.is_new()) return;
-        if (!frm._gocardless_setup) {
-            frm.trigger('setup_gocardless');
-            return;
-        }
-        if (!frm._gocardless_data) return;
-        if (!frm._gocardless_fields) {
-            frm._gocardless_fields = true;
-            frm.toggle_display('bank_account_no', false);
-            frm.toggle_display('gocardless_bank_account_no', true);
-        }
-        if (!frm._gocardless_toolbar)
-            frm.trigger('load_toolbar');
+    gc_check_status: function(frm) {
+        if (frm.is_new() || !frm._gc) return;
+        if (!frm._gc.setup) return frm.events.gc_setup_form(frm);
+        if (!frm._gc.data) return;
+        if (!frm._gc.fields) frm.events.gc_setup_fields(frm);
+        if (!frm._gc.error) frm.events.gc_setup_error(frm);
+        if (!frm._gc.bar) frm.events.gc_load_toolbar(frm);
     },
-    setup_gocardless: function(frm) {
-        frm._gocardless_setup = true;
-        frappe.gocardless().on_ready(function() {
-            if (!this.is_enabled) return;
-            this.request(
-                'get_bank_account_data',
-                {
-                    bank_account: frm.doc.name,
-                },
-                function(ret) {
-                    if (!$.isPlainObject(ret)) {
-                        if (cint(ret) === 0)
-                            this._error('The Gocardless plugin is disabled.');
-                        else if (cint(ret) === -1)
-                            this._info(__('The bank account "{0}" is not part of any Gocardless linked bank.',
-                                [frm.doc.name]));
-                        return;
-                    }
-                    if (!ret.bank_account || ret.bank_account !== frm.doc.name) {
-                        this._error('The bank account data received is invalid.', ret);
-                        return;
-                    }
-                    if (ret.error) {
-                        this._error(ret.error);
-                        return;
-                    }
-                    let status = cstr(ret.status).toLowerCase();
-                    if (!status.length) {
-                        this._error('The bank account data received is invalid.', ret);
-                        return;
-                    }
-                    let color = 'green';
-                    if (
-                        status === 'error' || status === 'expired'
-                        || status === 'suspended'
-                    ) color = 'red';
-                    if (status === 'discovered' || status === 'processing') color = 'blue';
-                    frm.set_intro(
-                        __('Linked to Gocardless (Status: <strong>{0}</strong>).', [ret.status]),
-                        color
-                    );
-                    if (!ret.bank || !ret.account || status !== 'ready') return;
-                    frm._gocardless_data = ret;
-                    frm.trigger('check_status');
-                },
-                function() {
-                    this._error(__('Unable to get the bank account data for {0}.', [frm.doc.name]));
-                }
-            );
-        });
+    gc_setup_form: function(frm) {
+        frm._gc.setup = 1;
+        frappe.gc()
+            .on('page_change page_pop', function() { frm && delete frm._gc; })
+            .on('ready change', function() {
+                if (frm._gc.enabled == null) frm._gc.enabled = this.is_enabled;
+                else if (frm._gc.enabled == this.is_enabled) return;
+                frm.events.gc_setup_fields(frm, frm._gc.enabled ? 1 : 0);
+                frm.events.gc_load_toolbar(frm, frm._gc.enabled ? 1 : 0);
+                frm._gc.enabled = this.is_enabled;
+                frm._gc.enabled && !frm._gc.data && frm.events.gc_get_data(frm);
+            });
     },
-    load_toolbar: function(frm) {
-        if (!frappe.gocardless.events.has('gocardless_bank_error'))
-            frappe.gocardless.events.add(
-                'gocardless_bank_error',
-                function(ret) {
-                    frappe.gocardless()._log('error event received');
-                    if (ret && $.isPlainObject(ret)) ret = ret.message || ret;
-                    if (
-                        $.isPlainObject(ret) && ret.error && (ret.name || ret.bank)
-                        && (ret.name === frm.doc.name || ret.bank === frm.doc.bank)
-                    ) {
-                        frappe.gocardless().error(ret.error);
-                    } else {
-                        frappe.gocardless()._error('invalid error data received', ret);
-                    }
-                    frappe.gocardless.events.clear();
-                    frm._gocardless_fields = false;
+    gc_setup_fields: function(frm, del) {
+        let val = !del ? 1 : 0;
+        if (frm._gc.fields === val) return;
+        if (val) frm._gc.fields = 1;
+        else delete frm._gc.fields;
+        frm.toggle_display('bank_account_no', !val);
+        frm.toggle_display('gocardless_bank_account_no', val);
+    },
+    gc_setup_error: function(frm) {
+        frm._gc.error = 1;
+        frappe.gc().real(
+            'bank_error',
+            function(ret) {
+                if (!frm._gc.enabled) return;
+                this._log('error event received');
+                if (
+                    !this.$isDataObj(ret) || !this.$isStrVal(ret.error)
+                    || (
+                        ret.any == null
+                        && (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.doc.name))
+                        && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
+                    )
+                ) this._error('Invalid error data received', ret);
+                else {
+                    this.error(ret.error);
+                    delete frm._gc.fields;
                     frm.reload_doc();
                 }
-            );
-        let sync_btn = __('Sync');
-        if (frm.custom_buttons[sync_btn]) return;
-        frm._gocardless_toolbar = true;
-        if (frm._gocardless_btn) frm._gocardless_btn.remove();
-        frm._gocardless_btn = null;
-        function enqueue_account_sync(from_date, to_date) {
-            frm._gocardless_btn.prop('disabled', true);
-            let args = {
-                bank: frm._gocardless_data.bank,
-                account: frm._gocardless_data.account,
-            };
-            if (from_date) args.from_date = from_date;
-            if (to_date) args.to_date = to_date;
-            frappe.gocardless().request(
-                'enqueue_bank_account_sync',
-                args,
-                function(ret) {
-                    frm._gocardless_btn.prop('disabled', false);
-                    if (!ret) {
-                        this.error('Unable to sync the bank account "{0}".', [frm.doc.name]);
-                        return;
-                    }
-                    if (cint(ret) === -1) {
-                        this.error('The Gocardless plugin is disabled.');
-                        return;
-                    }
-                    if (cint(ret) === -2) {
-                        this.error('The bank "{0}" is not linked to Gocardless.', [frm._gocardless_data.bank]);
-                        return;
-                    }
-                    if (cint(ret) === -3) {
-                        this.error('The bank account "{0}" is not part of the Gocardless linked bank "{1}".',
-                            [frm.doc.name, frm._gocardless_data.bank]);
-                        return;
-                    }
-                    frappe.show_alert({
-                        message: __('Bank account "{0}" is syncing in background', [frm.doc.name]),
-                        indicator: 'green'
-                    });
-                },
-                function() {
-                    frm._gocardless_btn.prop('disabled', false);
-                    this.error('Unable to sync the bank account "{0}".', [frm.doc.name]);
-                }
-            );
+            }
+        );
+    },
+    gc_load_toolbar: function(frm, del) {
+        let label = __('Sync');
+        if (frm.custom_buttons[label]) {
+            if (del) {
+                frm.custom_buttons[label].remove();
+                delete frm.custom_buttons[label];
+                delete frm._gc.bar;
+                delete frm._gc.btn;
+            }
+            return;
         }
-        frm._gocardless_btn = frm.add_custom_button(sync_btn, function() {
-            if (!frm._gocardless_data) {
-                frm._gocardless_btn.prop('disabled', true);
-                return;
-            }
-            if (cstr(frm._gocardless_data.last_sync).length) {
-                enqueue_account_sync();
-                return;
-            }
-            frappe.prompt(
-                [
-                    {
-                        'fieldname': 'from_date',
-                        'fieldtype': 'Date',
-                        'label': __('From Date'),
-                        'reqd': 1,
-                        'default': frappe.datetime.nowdate(),
-                        'max_date': frappe.datetime.now_date(true),
-                    },
-                    {
-                        'fieldname': 'to_date',
-                        'fieldtype': 'Date',
-                        'label': __('To Date'),
-                        'reqd': 1,
-                        'default': frappe.datetime.nowdate(),
-                        'max_date': frappe.datetime.now_date(true),
-                    },
-                ],
-                function(values) {
-                    frm._gocardless_data.last_sync = frappe.datetime.nowdate();
-                    enqueue_account_sync(values.from_date, values.to_date);
-                },
-                __('Sync Bank Account Transactions'),
-                sync_btn
-            );
+        if (del || frm._gc.bar) return;
+        frm._gc.bar = 1;
+        frm._gc.btn = frm.add_custom_button(label, function() {
+            if (!frm._gc.data) return frm._gc.btn.prop('disabled', true);
+            if (frappe.gc().$isStrVal(frm._gc.data.last_sync))
+                return frm.events.gc_enqueue_sync(frm);
+            frm.events.gc_show_prompt(frm);
         });
-        frm.change_custom_button_type(sync_btn, null, 'success');
-    }
+        frm.change_custom_button_type(label, null, 'success');
+        !frm._gc.data && frm._gc.btn.prop('disabled', true);
+    },
+    gc_get_data: function(frm) {
+        frappe.gc().request(
+            'get_bank_account_data',
+            {account: cstr(frm.docname)},
+            function(ret) {
+                if (
+                    !this.$isDataObj(ret)
+                    || !this.$isStrVal(ret.bank_account)
+                    || !this.$isStrVal(ret.status)
+                ) {
+                    frm.events.gc_setup_fields(frm, 1);
+                    frm.events.gc_load_toolbar(frm, 1);
+                    return this._error('Bank account data received is invalid.');
+                }
+                if (ret.bank_account !== frm.docname) {
+                    frm.events.gc_setup_fields(frm, 1);
+                    frm.events.gc_load_toolbar(frm, 1);
+                    return this._info('Bank account data received is for different bank account.', ret);
+                }
+                let status = ret.status.toLowerCase(),
+                color = 'green';
+                if (
+                    status === 'error'
+                    || status === 'expired'
+                    || status === 'suspended'
+                ) color = 'red';
+                else if (
+                    status === 'discovered'
+                    || status === 'processing'
+                ) color = 'blue';
+                frm.set_intro(
+                    __('Linked to Gocardless (Status: <strong>{0}</strong>).', [ret.status]),
+                    color
+                );
+                if (
+                    !this.$isStrVal(ret.bank)
+                    || !this.$isStrVal(ret.account)
+                    || status !== 'ready'
+                ) {
+                    frm.events.gc_setup_fields(frm);
+                    frm.events.gc_load_toolbar(frm, 1);
+                    return;
+                }
+                frm._gc.data = ret;
+                frm._gc.btn && frm._gc.btn.prop('disabled', false);
+                frm.events.gc_check_status(frm);
+            },
+            function(e) {
+                this._error(e.self ? e.message : __('Unable to get the bank account data for {0}.', [frm.docname]));
+            }
+        );
+    },
+    gc_show_prompt: function(frm) {
+        frappe.gc()._log('Accounts: prompting bank account sync dates');
+        frappe.prompt(
+            [
+                {
+                    fieldname: 'from_dt',
+                    fieldtype: 'Date',
+                    label: __('From Date'),
+                    reqd: 1,
+                    bold: 1,
+                    'default': frappe.datetime.nowdate(),
+                    max_date: frappe.datetime.now_date(true),
+                },
+                {
+                    fieldname: 'to_dt',
+                    fieldtype: 'Date',
+                    label: __('To Date'),
+                    reqd: 1,
+                    bold: 1,
+                    'default': frappe.datetime.nowdate(),
+                    max_date: frappe.datetime.now_date(true),
+                },
+            ],
+            function(vals) {
+                frappe.gc()._log('Accounts: syncing bank account', vals);
+                frm.events.gc_enqueue_sync(frm, vals.from_dt, vals.to_dt);
+            },
+            __('Sync Bank Account Transactions'),
+            __('Sync')
+        );
+    },
+    gc_enqueue_sync: function(frm, from_dt, to_dt) {
+        frm._gc.btn.prop('disabled', true);
+        let args = {
+            bank: frm._gc.data.bank,
+            account: frm._gc.data.account,
+        };
+        if (from_dt) args.from_dt = from_dt;
+        if (to_dt) args.to_dt = to_dt;
+        frappe.gc().request(
+            'enqueue_bank_transactions_sync',
+            args,
+            function(ret) {
+                frm._gc.btn.prop('disabled', false);
+                if (this.$isDataObj(ret) && ret.error) return this.error_(ret.error);
+                if (!ret) {
+                    this._error('Accounts: bank account sync failed');
+                    return this.error_(__('Unable to sync the bank account "{0}".', [frm.docname]));
+                }
+                this._log('Accounts: bank account sync success');
+                if (ret.info) this.info_(ret.info);
+                else this.success_(__('Bank account "{0}" is syncing in background', [frm.docname]));
+            },
+            function(e) {
+                frm._gc.btn.prop('disabled', false);
+                this.error(e.self ? e.message : __('Unable to sync the bank account "{0}".', [frm.docname]));
+            }
+        );
+    },
 });

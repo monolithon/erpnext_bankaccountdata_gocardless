@@ -1,20 +1,14 @@
-# ERPNext Gocardless Bank © 2023
+# ERPNext Gocardless Bank © 2024
 # Author:  Ameen Ahmed
 # Company: Level Up Marketing & Software Development Services
 # Licence: Please refer to LICENSE file
 
 
-from .gocardless_common import to_json, to_pretty_json
-
-
-class GocardlessApi:
-    url = "https://bankaccountdata.gocardless.com/api/v2/"
-    headers = {
-        "Accept": "application/json"
-    }
-    post_headers = {
-        "Content-Type": "application/json"
-    }
+class Api:
+    url = "https://ob.gocardless.com/api/v2/"
+    headers = {"Accept": "application/json"}
+    post_headers = {"Content-Type": "application/json"}
+    valid_status_codes = [200, 201]
     
     
     new_token = "token/new/"
@@ -30,7 +24,9 @@ class GocardlessApi:
         if pay_option:
             qry.append("payments_enabled=true")
         if qry:
-            uri = uri + "?" + "&".join(qry)
+            qry = "&".join(qry)
+            uri = f"{uri}?{qry}"
+        
         return uri
     
     
@@ -43,8 +39,21 @@ class GocardlessApi:
         return f"requisitions/{auth_id}/"
     
     
-    account_status_new = ["enabled", "deleted", "blocked"]
-    account_status = ["DISCOVERED", "PROCESSING", "ERROR", "EXPIRED", "READY", "SUSPENDED"]
+    account_status = {
+        "new": [
+            "enabled",
+            "deleted",
+            "blocked"
+        ],
+        "old": [
+            "DISCOVERED",
+            "PROCESSING",
+            "ERROR",
+            "EXPIRED",
+            "READY",
+            "SUSPENDED"
+        ]
+    }
     
     
     @staticmethod
@@ -71,7 +80,9 @@ class GocardlessApi:
         if date_to:
             qry.append(f"date_to={date_to}")
         if qry:
-            uri = uri + "?" + "&".join(qry)
+            qry = "&".join(qry)
+            uri = f"{uri}?{qry}"
+        
         return uri
     
     
@@ -138,30 +149,32 @@ class GocardlessApi:
     
     @staticmethod
     def prepare_transactions(transactions):
+        from .common import to_json
+        
         for entry in transactions:
             info = {}
             for k in list(entry):
                 ek = "main"
-                if k in GocardlessApi.transactions[ek]:
-                    entry[GocardlessApi.transactions[ek][k]] = entry.pop(k)
+                if k in Api.transactions[ek]:
+                    entry[Api.transactions[ek][k]] = entry.pop(k)
                     continue
                 
                 ek = "date"
-                if k in GocardlessApi.transactions[ek]:
+                if k in Api.transactions[ek]:
                     val = entry.pop(k)
                     if ek not in entry and val:
                         entry[ek] = val
                     
                     if (
                         ek in entry and val and
-                        k in GocardlessApi.transactions["keys"]
+                        k in Api.transactions["keys"]
                     ):
-                        info[GocardlessApi.transactions["keys"][k]] = val
+                        info[Api.transactions["keys"][k]] = val
                     
                     continue
                 
                 ek = "description"
-                if k in GocardlessApi.transactions[ek]:
+                if k in Api.transactions[ek]:
                     val = entry.pop(k)
                     if ek not in entry and val:
                         if isinstance(val, list):
@@ -171,13 +184,13 @@ class GocardlessApi:
                     
                     if (
                         ek in entry and val and
-                        k in GocardlessApi.transactions["keys"]
+                        k in Api.transactions["keys"]
                     ):
-                        info[GocardlessApi.transactions["keys"][k]] = val
+                        info[Api.transactions["keys"][k]] = val
                     
                     continue
                 
-                if k in GocardlessApi.transactions["merge"]:
+                if k in Api.transactions["merge"]:
                     val = entry.pop(k)
                     if val:
                         entry.update(val)
@@ -185,18 +198,18 @@ class GocardlessApi:
                     continue
                 
                 ek = "information"
-                if k in GocardlessApi.transactions[ek]:
+                if k in Api.transactions[ek]:
                     val = entry.pop(k)
                     if val:
                         if k == "currencyExchange" and isinstance(val, dict):
-                            val = GocardlessApi.prepare_currency_exchange(val)
+                            val = Api.prepare_currency_exchange(val)
                         
-                        info[GocardlessApi.transactions[ek][k]] = val
+                        info[Api.transactions[ek][k]] = val
                     
                     continue
                 
                 ek = "supplier"
-                if k in GocardlessApi.transactions[ek]:
+                if k in Api.transactions[ek]:
                     val = entry.pop(k)
                     if ek not in entry:
                         entry[ek] = {}
@@ -213,7 +226,7 @@ class GocardlessApi:
                     continue
                 
                 ek = "customer"
-                if k in GocardlessApi.transactions[ek]:
+                if k in Api.transactions[ek]:
                     val = entry.pop(k)
                     if ek not in entry:
                         entry[ek] = {}
@@ -227,7 +240,7 @@ class GocardlessApi:
                         else:
                             del entry[ek][nk]
             
-            entry["information"] = to_pretty_json(info, "")
+            entry["information"] = to_json(info, "", True)
         
         return transactions
     
@@ -236,8 +249,8 @@ class GocardlessApi:
     def prepare_currency_exchange(entry):
         for k in list(entry):
             val = entry.pop(k)
-            if val and k in GocardlessApi.transactions["exchange_keys"]:
-                entry[GocardlessApi.transactions["exchange_keys"][k]] = val
+            if val and k in Api.transactions["exchange_keys"]:
+                entry[Api.transactions["exchange_keys"][k]] = val
         
         return entry
     
@@ -263,30 +276,34 @@ class GocardlessApi:
         err = {
             "error": 1,
             "title": "Response Error",
-            "message": "The response received is invalid.",
+            "message": "Api response received is invalid.",
         }
-        if not isinstance(data, dict):
+        if not data or not isinstance(data, dict):
             return err
         
-        for k in GocardlessApi.errors["list"]:
+        for k in Api.errors["list"]:
             if (
                 k in data and isinstance(data[k], list) and
                 data[k] and isinstance(data[k][0], dict)
             ):
                 return {
                     "error": 1,
-                    "list": [GocardlessApi.parse_error(v) for v in data[k]]
+                    "list": [Api.parse_error(v) for v in data[k]]
                 }
         
+        from .common import to_json
+        
         parsed = False
-        for k in GocardlessApi.errors["main"]:
+        for k in Api.errors["main"]:
             if k in data and isinstance(data[k], list):
-                data = {"detail": to_json(data)}
-                parsed = True
-                break
+                jdata = to_json(data)
+                if jdata:
+                    data = {"detail": jdata}
+                    parsed = True
+                    break
         
         if not parsed:
-            for k in GocardlessApi.errors["fields"]:
+            for k in Api.errors["fields"]:
                 if k in data and isinstance(data[k], dict):
                     data = data[k]
                     break

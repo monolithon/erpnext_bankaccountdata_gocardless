@@ -1,45 +1,61 @@
 {
- "actions": [],
- "allow_copy": 1,
+ "allow_copy": 0,
  "allow_import": 1,
  "autoname": "hash",
  "creation": "2022-04-04 04:04:04.119400",
  "description": "Gocardless linked bank accounts",
  "doctype": "DocType",
- "document_type": "Document",
  "engine": "InnoDB",
  "field_order": [
-  "main_section",
   "account",
   "account_id",
+  "main_column",
+  "account_currency",
+  "status",
   "account_type",
   "account_no",
   "iban",
-  "main_column",
   "balances",
-  "status",
   "bank_account",
   "last_sync"
  ],
  "fields": [
   {
-   "fieldname": "main_section",
-   "fieldtype": "Section Break"
-  },
-  {
    "fieldname": "account",
    "fieldtype": "Data",
    "label": "Account",
-   "reqd": 1,
    "bold": 1,
+   "read_only": 1,
    "in_list_view": 1
   },
   {
    "fieldname": "account_id",
    "fieldtype": "Data",
    "label": "Account ID",
-   "reqd": 1,
    "bold": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "main_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "account_currency",
+   "fieldtype": "Data",
+   "label": "Currency",
+   "bold": 1,
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "\nDiscovered\nProcessing\nError\nExpired\nReady\nSuspended\nEnabled\nDeleted\nBlocked",
+   "default": "",
+   "bold": 1,
+   "read_only": 1,
    "in_list_view": 1
   },
   {
@@ -61,22 +77,10 @@
    "hidden": 1
   },
   {
-   "fieldname": "main_column",
-   "fieldtype": "Column Break"
-  },
-  {
    "fieldname": "balances",
    "fieldtype": "Long Text",
    "label": "Balances",
    "hidden": 1
-  },
-  {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "label": "Status",
-   "options": "\nDiscovered\nProcessing\nError\nExpired\nReady\nSuspended\nEnabled\nDeleted\nBlocked",
-   "default": "",
-   "in_list_view": 1
   },
   {
    "fieldname": "bank_account",
@@ -94,15 +98,9 @@
   }
  ],
  "istable": 1,
- "links": [],
- "modified": "2022-04-04 04:04:04.119400",
+ "modified": "2024-05-12 04:04:04",
  "modified_by": "Administrator",
  "module": "ERPNext Gocardless Bank",
  "name": "Gocardless Bank Account",
- "owner": "Administrator",
- "permissions": [],
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": [],
- "track_changes": 1
+ "owner": "Administrator"
 }

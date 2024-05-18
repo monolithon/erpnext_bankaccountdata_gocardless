@@ -1,5 +1,5 @@
 /*
-*  ERPNext Gocardless Bank © 2023
+*  ERPNext Gocardless Bank © 2024
 *  Author:  Ameen Ahmed
 *  Company: Level Up Marketing & Software Development Services
 *  Licence: Please refer to LICENSE file
@@ -10,11 +10,10 @@ frappe.provide("frappe.listview_settings");
 
 
 frappe.listview_settings['Gocardless Sync Log'] = {
-    hide_name_column: true,
     onload: function(list) {
-        list.page.clear_primary_action();
+        frappe.gc().disable_list(list, __('Doctype is read only.'));
     },
     primary_action: function() {
-        frappe.throw(__('You cannot add logs manually.'));
+        frappe.gc().error(__('You cannot add logs manually.'));
     },
 };

@@ -7,5 +7,5 @@
 from frappe.model.document import Document
 
 
-class GocardlessSyncLog(Document):
+class GocardlessAccess(Document):
     pass

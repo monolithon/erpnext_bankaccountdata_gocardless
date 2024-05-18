@@ -1,10 +1,7 @@
-# ERPNext Gocardless Bank © 2023
+# ERPNext Gocardless Bank © 2024
 # Author:  Ameen Ahmed
 # Company: Level Up Marketing & Software Development Services
 # Licence: Please refer to LICENSE file
-
-
-from .version import __frappe_version_min_14__
 
 
 app_name = "erpnext_gocardless_bank"
@@ -17,32 +14,34 @@ app_email = "kid1194@gmail.com"
 app_license = "MIT"
 
 
-required_apps = ["erpnext"]
+before_install = "erpnext_gocardless_bank.setup.install.before_install"
+after_sync = "erpnext_gocardless_bank.setup.install.after_sync"
+after_uninstall = "erpnext_gocardless_bank.setup.uninstall.after_uninstall"
 
-
-app_include_js = [
-    "gocardless.bundle.js"
-] if __frappe_version_min_14__ else [
-    "/assets/erpnext_gocardless_bank/js/gocardless.bundle.js"
-]
 
 doctype_js = {
+    "Gocardless Bank" : "public/js/gocardless.bundle.js",
+    "Gocardless Sync Log" : "public/js/gocardless.bundle.js",
+    "Gocardless Settings" : "public/js/gocardless.bundle.js",
+    
     "Bank Account" : "public/js/bank_account.bundle.js",
     "Bank Transaction" : "public/js/bank_transaction.bundle.js"
 }
 
 
-after_install = "erpnext_gocardless_bank.setup.install.after_install"
-before_uninstall = "erpnext_gocardless_bank.setup.uninstall.before_uninstall"
+doctype_list_js = {
+    "Gocardless Bank" : "public/js/gocardless.bundle.js",
+    "Gocardless Sync Log" : "public/js/gocardless.bundle.js"
+}
 
 
 scheduler_events = {
     "daily": [
-        "erpnext_gocardless_bank.libs.gocardless.update_banks_status"
+        "erpnext_gocardless_bank.libs.schedule.update_banks_status"
     ],
     "cron": {
         "0 */6 * * *": [
-            "erpnext_gocardless_bank.libs.gocardless.auto_sync"
+            "erpnext_gocardless_bank.libs.schedule.auto_sync"
         ],
     }
 }
