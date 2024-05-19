@@ -346,7 +346,7 @@
                 frappe[k[i]] && (o._router.obj = frappe[k[i]]) && (i < 1 || (o._router.old = 1));
             this._reg(o, 'on');
         },
-        off(o) { this._reg(o, 'off'); && (o._router.obj = o._router.old = null); },
+        off(o) { this._reg(o, 'off') && (o._router.obj = o._router.old = null); },
         get(o) {
             let v;
             try { o._router.obj && (v = !o._router.old ? frappe.get_route() : o._router.obj.parse()); } catch(_) {}
@@ -361,8 +361,8 @@
         is_field(f) { return f && f.df && !/^((Tab|Section|Column) Break|Table)$/.test(f.df.fieldtype); },
         is_table(f) { return f && f.df && f.df.fieldtype === 'Table'; },
         get_field(f, k, g, r, c, m) {
-            return ((f = f.get_field(k)) && (!g || (f = f.grid))
-                && (r == null || ((f = f.get_row(r)) && (!m || (f = f.grid_form))))
+            return ((f = f.get_field(k)) && (!g || ((f = f.grid)
+                && (r == null || ((f = f.get_row(r)) && (!m || (f = f.grid_form))))))
                 && (!c || (f = r != null && m ? f.fields_dict[c] : f.get_field(c))) && f) || null;
         },
         reload_field(f, k, r, c) {
@@ -402,7 +402,6 @@
         },
         field_prop(f, k, g, r, c, p, v, t) {
             if (LU.$isBaseObj(k)) for (let x in k) this.field_prop(f, x, g, r, c, k[x], null, t);
-            else if (LU.$isBaseObj(r)) for (let x in r) this.field_prop(f, k, g, x, c, r[x], null, t);
             else if (LU.$isBaseObj(c)) for (let x in c) this.field_prop(f, k, g, r, x, c[x], null, t);
             else {
                 (g || r != null) && (t || (f = this.get_field(f, k, g, r))) && (k = c);
@@ -705,7 +704,7 @@
         get_tfield(f, k, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, null, c); }
         get_row(f, k, r) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r); }
         get_rfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c); }
-        get_rform(f, k, r) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, 0, 1); }
+        get_r(f, k, r) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, 0, 1); }
         get_rmfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c, 1); }
         reload_field(f) {
             arguments.length > 1 && (f = this.get_form(f)) && LUF.reload_field(f, this.$toArr(arguments, 1));
