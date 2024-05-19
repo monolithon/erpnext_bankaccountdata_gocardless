@@ -5,6 +5,7 @@
 
 
 import frappe
+from frappe import _
 
 
 # [Hooks]
@@ -48,8 +49,14 @@ def update_banks_status():
                 .where(doc.name.isin(banks))
             ).run()
         except Exception as exc:
-            log_error(exc)
-            error(_("Unable to update Gocardless bank auth status"), False, "xYRxZTKz99")
+            _store_error(
+                {
+                    "error": "Unable to update bank auth status.",
+                    "banks": banks,
+                    "exception": str(exc)
+                }, _("Unable to update Gocardless bank auth status.")
+            )
+            return 0
         
         try:
             adoc = frappe.qb.DocType(f"{dt} Account")
@@ -61,14 +68,15 @@ def update_banks_status():
                 .where(adoc.parentfield == "bank_accounts")
             ).run()
         except Exception as exc:
-            from .common import store_error, log_error
-            
-            store_error({
-                "error": "Unable to update bank accounts status",
-                "banks": banks,
-                "exception": str(exc)
-            })
-            log_error(_("Unable to update Gocardless bank accounts status."))
+            _store_error(
+                {
+                    "error": "Unable to update bank accounts status",
+                    "banks": banks,
+                    "exception": str(exc)
+                },
+                _("Unable to update Gocardless bank accounts status.")
+            )
+            return 0
     
     update_bank_accounts_status()
 
@@ -110,6 +118,7 @@ def sync_bank(name, trigger):
     from .datetime import (
         now_utc,
         to_date,
+        to_date_obj,
         reformat_date,
         add_date
     )
@@ -122,20 +131,40 @@ def sync_bank(name, trigger):
     settings = settings()
     client = get_client()
     for v in doc.bank_accounts:
-        if v.status != "Ready" or get_cache(_SYNC_KEY_, v.account):
+        if v.status != "Ready" or get_cache(_SYNC_KEY_, v.account, True):
             continue
         
         from_dt = None
         to_dt = today
         if v.last_sync:
             from_dt = reformat_date(v.last_sync)
-            if from_dt == today:
+            from_obj = to_date_obj(from_dt)
+            diff = now - from_obj
+            diff = cint(diff.days)
+            if diff <= 0:
                 from_dt = None
             else:
-                from_obj = to_date(from_dt)
-                delta = to_date(to_dt) - from_obj
-                if cint(delta.days) > 1:
-                    to_dt = add_date(from_obj, days=1, as_string=True)
+                diff = to_date_obj(to_dt) - from_obj
+                diff = cint(diff.days)
+                if diff > 1:
+                    from .bank_transaction import get_dates_list
+                    
+                    for dt in get_dates_list(from_dt, to_dt):
+                        if not queue_bank_transactions_sync(
+                            settings, client, name, doc.bank, trigger,
+                            v.name, v.account, v.account_id,
+                            v.bank_account, dt[0], dt[1], dt[2]
+                        ):
+                            _store_error({
+                                "error": "An error was raised while syncing bank account.",
+                                "bank": name,
+                                "trigger": trigger,
+                                "from_dt": dt[0],
+                                "to_dt": dt[1],
+                                "data": v.as_dict(convert_dates_to_str=True)
+                            })
+                    
+                    return 1
         
         if not from_dt:
             from_dt = add_date(now, days=-1, as_string=True)
@@ -145,7 +174,14 @@ def sync_bank(name, trigger):
             v.name, v.account, v.account_id,
             v.bank_account, from_dt, to_dt
         ):
-            return 0
+            _store_error({
+                "error": "An error was raised while syncing bank account.",
+                "bank": name,
+                "trigger": trigger,
+                "from_dt": from_dt,
+                "to_dt": to_dt,
+                "data": v.as_dict(convert_dates_to_str=True)
+            })
 
 
 # [Internal]
@@ -201,11 +237,20 @@ def update_bank_accounts_status():
         try:
             update_bank_account_data(v["name"], {"status": data["status"]})
         except Exception as exc:
-            from .common import store_error, log_error
-            
-            store_error({
-                "error": "Unable to update account status",
-                "data": v,
+            _store_error({
+                "error": "Unable to update bank account status",
+                "account_data": v,
+                "data": data,
                 "exception": str(exc)
             })
-            log_error(_("Unable to update account status of {0} for {1}").format(v["account"], v["parent"]))
+
+
+# [Internal]
+def _store_error(data, err=None):
+    from .common import store_error
+    
+    store_error(data)
+    if err:
+        from .common import log_error
+        
+        log_error(err)

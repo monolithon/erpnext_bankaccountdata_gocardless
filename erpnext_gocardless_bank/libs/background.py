@@ -9,7 +9,7 @@ import frappe
 from erpnext_gocardless_bank.version import is_version_gt
 
 
-# [Clean, Currency]
+# [Bank, Bank Transaction, Clean, Currency]
 def is_job_running(name: str):
     if is_version_gt(14):
         from frappe.utils.background_jobs import is_job_enqueued
@@ -23,8 +23,16 @@ def is_job_running(name: str):
         return True if name in jobs else False
 
 
-# [Bank, Clean, Currency]
+# [Bank, Bank Transaction, Clean, Currency]
 def enqueue_job(method: str, job_name: str, **kwargs):
+    if "timeout" in kwargs and "queue" not in kwargs:
+        from frappe.utils import cint
+        
+        if cint(kwargs["timeout"]) >= 1500:
+            kwargs["queue"] = "long"
+        else:
+            kwargs["queue"] = "short"
+    
     if is_version_gt(14):
         frappe.enqueue(
             method,

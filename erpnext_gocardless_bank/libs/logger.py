@@ -72,10 +72,28 @@ def load_log_file(filename):
     if not os.path.exists(path):
         return ""
     
-    tmp = open(path)
-    data = tmp.read()
-    tmp.close()
+    with open(path, "r") as file:
+        data = file.read()
+    
     return data
+
+
+# [G Settings Form]
+@frappe.whitelist(methods=["POST"])
+def remove_log_file(filename):
+    if (
+        not filename or
+        not isinstance(filename, str) or
+        not filename.startswith(__abbr__)
+    ):
+        return 0
+    
+    path = os.path.join("..", "logs", filename)
+    if not os.path.exists(path):
+        return 0
+    
+    os.remove(path)
+    return 1
 
 
 # [Internal]

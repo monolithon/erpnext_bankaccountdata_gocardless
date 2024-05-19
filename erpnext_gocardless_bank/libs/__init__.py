@@ -24,7 +24,8 @@ from .data import *
 from .filter import *
 from .logger import (
     get_log_files,
-    load_log_file
+    load_log_file,
+    remove_log_file
 )
 from .realtime import *
 from .system import (

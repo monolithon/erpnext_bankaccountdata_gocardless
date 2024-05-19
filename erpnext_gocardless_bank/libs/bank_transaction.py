@@ -4,9 +4,6 @@
 # Licence: Please refer to LICENSE file
 
 
-import hashlib
-import uuid
-
 import frappe
 
 
@@ -27,7 +24,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         (from_dt and not isinstance(from_dt, str)) or
         (to_dt and not isinstance(to_dt, str))
     ):
-        return {"error": _("Arguments are invalid.")}
+        return {"error": _("Arguments required for bank transactions sync are invalid.")}
     
     from .system import settings
     
@@ -40,7 +37,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     from .cache import get_cache
     
     if get_cache(_SYNC_KEY_, account, True):
-        return {"info": _("Bank account sync is in progress.")}
+        return {"info": _("Bank transactions sync is in progress.")}
     
     from .cache import get_cached_doc
     
@@ -51,7 +48,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     
     accounts = {v.account:v for v in doc.bank_accounts}
     if account not in accounts:
-        return {"error": _("Bank account \"{0}\" is not part of Gocardless bank \"{1}\".").format(account, bank)}
+        return {"error": _("Bank account \"{0}\" doesn't belong to Gocardless bank \"{1}\".").format(account, bank)}
     
     from .system import get_client
     
@@ -69,8 +66,13 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     now = now_utc()
     today = to_date(now)
     data = accounts[account]
+    has_to_dt = 0
+    dt_diff = 2
     if from_dt or to_dt:
-        from .datetime import reformat_date
+        from .datetime import (
+            reformat_date,
+            to_date_obj
+        )
         
         if from_dt:
             from_dt = reformat_date(from_dt)
@@ -82,13 +84,21 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         elif not to_dt and from_dt:
             to_dt = add_date(from_dt, days=1, as_string=True)
         
-        if from_dt == today:
+        from_diff = now - to_date_obj(from_dt)
+        from_diff = cint(from_diff.days)
+        if from_diff <= 0:
             from_dt = None
+            if to_dt:
+                diff = to_date_obj(to_dt) - now
+                diff = cint(diff.days)
+                if diff > 0:
+                    has_to_dt = 1
+                    dt_diff = diff + 1
+        
         else:
             has_error = 0
             if cint(doc.transaction_days):
-                diff = now - to_date(from_dt)
-                diff = cint(diff.days) - cint(doc.transaction_days)
+                diff = from_diff - cint(doc.transaction_days)
                 if diff > 0:
                     from_dt = add_date(from_dt, days=diff, as_string=True)
             
@@ -96,7 +106,8 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
                 if not queue_bank_transactions_sync(
                     settings, client, bank, doc.bank, "Manual",
                     data.name, data.account, data.account_id,
-                    data.account_currency, data.bank_account, dt[0], dt[1]
+                    data.account_currency, data.bank_account,
+                    dt[0], dt[1], dt[2]
                 ):
                     has_error += 1
             
@@ -109,11 +120,14 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
             return 1
     
     if not from_dt:
-        to_dt = add_date(now, days=1, as_string=True)
+        from_dt = today
+        if not has_to_dt:
+            to_dt = add_date(now, days=1, as_string=True)
         if not queue_bank_transactions_sync(
             settings, client, bank, doc.bank, "Manual",
             data.name, data.account, data.account_id,
-            data.account_currency, data.bank_account, today, to_dt
+            data.account_currency, data.bank_account,
+            from_dt, to_dt, dt_diff
         ):
             return {
                 "error": _("An error was raised while syncing bank account \"{0}\" of Gocardless bank \"{1}\".")
@@ -125,10 +139,14 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
 
 # [Internal]
 def get_dates_list(from_dt, to_dt):
-    from .datetime import to_date, add_date
+    from .datetime import (
+        to_date,
+        to_date_obj,
+        add_date
+    )
     
-    from_obj = to_date(from_dt)
-    delta = to_date(to_dt) - from_obj
+    from_obj = to_date_obj(from_dt)
+    delta = to_date_obj(to_dt) - from_obj
     diff = cint(delta.days)
     last_date = from_obj
     ret = []
@@ -140,7 +158,7 @@ def get_dates_list(from_dt, to_dt):
         fdt = to_date(last_date)
         last_date = add_date(last_date, days=1)
         tdt = to_date(last_date)
-        ret.append([fdt, tdt])
+        ret.append([fdt, tdt, 2])
     
     return ret
 
@@ -148,30 +166,32 @@ def get_dates_list(from_dt, to_dt):
 # [Schedule, Internal]
 def queue_bank_transactions_sync(
     settings, client, bank, account_bank, trigger, account_name,
-    account, account_id, account_currency, bank_account, from_dt, to_dt
+    account, account_id, account_currency, bank_account,
+    from_dt, to_dt, dt_diff=1
 ):
-    from .common import store_info
     from .datetime import today_utc_date
     from .sync_log import get_sync_data
     
     today = today_utc_date()
     sync_data = get_sync_data(bank, account, today)
     if sync_data is None:
-        store_info((
-            "The sync log data of the bank account {0} that belongs to {1} is invalid."
-        ).format(account, account_bank))
+        _store_info({
+            "error": "Sync log data is invalid.",
+            "bank": bank,
+            "account_bank": account_bank,
+            "account": account
+        })
         return 0
     
     if len(sync_data) >= _SYNC_LIMIT:
-        store_info((
-            "The synchronization for the bank account {0} "
-            + "of {1} has exceeded the allowed limit {2}."
-        ).format(account, account_bank, _SYNC_LIMIT))
+        _store_info({
+            "error": "Sync exceeded the allowed limit.",
+            "bank": bank,
+            "account_bank": account_bank,
+            "account": account,
+            "limit": _SYNC_LIMIT
+        })
         return 0
-    
-    store_info((
-        "The sync transactions for the bank account {0} of {1} has been queued."
-    ).format(account, account_bank))
     
     from .background import is_job_running
     
@@ -183,7 +203,7 @@ def queue_bank_transactions_sync(
             "erpnext_gocardless_bank.libs.bank_transaction.sync_bank_transactions",
             job_id,
             queue="long",
-            timeout=5000,
+            timeout=10000 * dt_diff,
             settings=settings,
             client=client,
             sync_id=uuid.uuid4(),
@@ -215,7 +235,6 @@ def sync_bank_transactions(
         return 0
     
     from .cache import set_cache
-    from .common import store_info
     
     set_cache(_SYNC_KEY_, account, True, 1500)
     result = _dict({
@@ -230,7 +249,7 @@ def sync_bank_transactions(
                     k in transactions and transactions[k] and
                     isinstance(transactions[k], list)
                 ):
-                    store_info({
+                    _store_info({
                         "info": "Processing bank transactions.",
                         "key": k,
                         "account": account,
@@ -243,7 +262,7 @@ def sync_bank_transactions(
                         client.prepare_entries(transactions.pop(k))
                     )
                 else:
-                    store_info({
+                    _store_info({
                         "info": "Skipping bank transactions.",
                         "key": k,
                         "account": account
@@ -290,89 +309,116 @@ def new_bank_transaction(
     result, settings, account_bank, account,
     account_currency, bank_account, data, status
 ):
-    from .common import store_info, to_json
-    from .currency import (
-        get_currency_status,
-        add_currencies,
-        enable_currencies
-    )
     from .datetime import today_utc_datetime
     
     if "transaction_id" not in data:
         if settings.bank_transaction_without_id == "Ignore":
-            store_info(_(
-                "The new {0} transaction for bank account \"{1}\" has been ignored " +
-                "since it has no transaction id."
-            ).format(status, account))
-            store_info(data)
+            _store_info({
+                "error": "Transaction has no id so ignored.",
+                "account_bank": account_bank,
+                "account": account,
+                "account_currency": account_currency,
+                "bank_account": bank_account,
+                "status": status,
+                "data": data
+            })
             return 0
         else:
-            data["transaction_id"] = uuid.UUID(hashlib.sha256(
-                to_json(data, "").encode("utf-8")
-            ).hexdigest()[::2])
+            data["transaction_id"] = make_transaction_id(data)
     
     if "date" not in data:
         if settings.bank_transaction_without_date == "Ignore":
-            store_info(_(
-                "The new {0} transaction for bank account \"{1}\" has been ignored "
-                + "since it has no date."
-            ).format(status, account))
-            store_info(data)
+            _store_info({
+                "error": "Transaction has no date so ignored.",
+                "account_bank": account_bank,
+                "account": account,
+                "account_currency": account_currency,
+                "bank_account": bank_account,
+                "status": status,
+                "data": data
+            })
             return 0
         
         data["date"] = today_utc_datetime()
     
     if "amount" not in data:
         if settings.bank_transaction_without_amount == "Ignore":
-            store_info(_(
-                "The new {0} transaction for bank account \"{1}\" has been ignored "
-                + "since it has no amount."
-            ).format(status, account))
-            store_info(data)
+            _store_info({
+                "error": "Transaction has no amount so ignored.",
+                "account_bank": account_bank,
+                "account": account,
+                "account_currency": account_currency,
+                "bank_account": bank_account,
+                "status": status,
+                "data": data
+            })
             return 0
         
         data["amount"] = 0
     
     if "currency" not in data:
         if settings.bank_transaction_without_currency == "Ignore":
-            store_info(_(
-                "The new {0} transaction for bank account \"{1}\" has been ignored "
-                + "since it has no currency."
-            ).format(status, account))
-            store_info(data)
+            _store_info({
+                "error": "Transaction has no currency so ignored.",
+                "account_bank": account_bank,
+                "account": account,
+                "account_currency": account_currency,
+                "bank_account": bank_account,
+                "status": status,
+                "data": data
+            })
             return 0
         
         data["currency"] = account_currency
     
     else:
+        from .currency import get_currency_status
+        
         currency_status = get_currency_status(data["currency"])
         if currency_status is None:
             if settings.bank_transaction_currency_doesnt_exist == "Ignore":
-                store_info(_(
-                    "The new {0} transaction for bank account \"{1}\" has been ignored " +
-                    "since it has no existing currency."
-                ).format(status, account))
-                store_info(data)
+                _store_info({
+                    "error": "Transaction currency doesn't exist so ignored.",
+                    "account_bank": account_bank,
+                    "account": account,
+                    "account_currency": account_currency,
+                    "bank_account": bank_account,
+                    "status": status,
+                    "data": data
+                })
                 return 0
+            
+            from .currency import add_currencies
             
             add_currencies([data["currency"]])
         elif not currency_status:
             if settings.bank_transaction_currency_disabled == "Ignore":
+                _store_info({
+                    "error": "Transaction currency is disabled so ignored.",
+                    "account_bank": account_bank,
+                    "account": account,
+                    "account_currency": account_currency,
+                    "bank_account": bank_account,
+                    "status": status,
+                    "data": data
+                })
                 return 0
+            
+            from .currency import enable_currencies
             
             enable_currencies([data["currency"]])
     
     data["amount"] = flt(data["amount"])
-    if data["amount"] >= 0:
+    def_amount = 0.0
+    if data["amount"] >= def_amount:
         debit = abs(data["amount"])
-        credit = 0
+        credit = def_amount
     else:
-        debit = 0
+        debit = def_amount
         credit = abs(data["amount"])
     
-    status = "Pending" if status == "pending" else "Settled"
     dt = "Bank Transaction"
-    
+    status = "Pending" if status == "pending" else "Settled"
     if not frappe.db.exists(dt, {"transaction_id": data["transaction_id"]}):
         try:
             entry_data = _dict({
@@ -408,6 +454,18 @@ def new_bank_transaction(
                 "data": data,
                 "exception": str(exc)
             })
+
+
+# [Internal]
+def make_transaction_id(data):
+    import hashlib
+    import uuid
+    
+    from .common import to_json
+    
+    return uuid.UUID(hashlib.sha256(
+        to_json(data, "").encode("utf-8")
+    ).hexdigest()[::2])
 
 
 # [Internal]
@@ -564,3 +622,10 @@ def _store_error(data):
     from .common import store_error
     
     store_error(data)
+
+
+# [Internal]
+def _store_info(data):
+    from .common import store_info
+    
+    store_info(data)

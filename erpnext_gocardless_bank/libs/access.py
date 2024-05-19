@@ -12,12 +12,12 @@ def update_access(row, client):
     if not row.access_token:
         return access_connect(row, client, now)
     
-    from .datetime import to_datetime
+    from .datetime import to_datetime_obj
     
-    if to_datetime(row.access_expiry) > now:
+    if to_datetime_obj(row.access_expiry) > now:
         return 0
     
-    if to_datetime(row.refresh_expiry) > now:
+    if to_datetime_obj(row.refresh_expiry) > now:
         return access_refresh(row, client, now)
     
     return access_connect(row, client, now)
