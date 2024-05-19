@@ -233,7 +233,7 @@
             this.call('on_ajax', o);
             try { $.ajax(o); } catch(e) {
                 (f = this.$fn(f)) ? f(e) : this._error(e.message);
-                this._err && throw e;
+                if (this._err) throw e;
             } finally { this._err = 0; }
             return this;
         }
@@ -262,7 +262,7 @@
             !this.$isEmptyObj(a) && this.$assign(d, {type: 'POST', args: a});
             try { frappe.call(d); } catch(e) {
                 (f = this.$fn(f)) ? f(e) : this._error(e.message);
-                this._err && throw e;
+                if (this._err) throw e;
             } finally { this._err = 0; }
             return this;
         }
