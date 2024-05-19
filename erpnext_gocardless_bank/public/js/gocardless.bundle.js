@@ -207,7 +207,7 @@
         error_(m) { return this.$toast(m, 'red'); }
         $console(fn, a) {
             if (this._prod) return this;
-            !this.$isStr(a[0]) ? Array.prototype.unshift.call(a, this._pfx);
+            !this.$isStr(a[0]) ? Array.prototype.unshift.call(a, this._pfx)
                 : (a[0] = (this._pfx + ' ' + a[0]).trim());
             (console[fn] || console.log).apply(null, a);
             return this;
