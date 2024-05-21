@@ -9,8 +9,7 @@ from frappe import _
 from frappe.utils import (
     get_request_session,
     get_request_site_address,
-    cstr,
-    cint
+    cstr
 )
 
 from .api import Api
@@ -467,7 +466,7 @@ class Gocardless:
         return response
     
     
-    def _report_error(data):
+    def _report_error(self, data):
         if "list" not in data:
             data = {"list": data}
         if not isinstance(data["list"], list):
@@ -504,13 +503,13 @@ class Gocardless:
             self._store_error({"error": err, "data": raw})
     
     
-    def _store_error(data):
+    def _store_error(self, data):
         from .common import store_error
         
         store_error(data)
     
     
-    def _store_info(data):
+    def _store_info(self, data):
         from .common import store_info
         
         store_info(data)

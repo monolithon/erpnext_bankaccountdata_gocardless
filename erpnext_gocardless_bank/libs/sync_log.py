@@ -20,7 +20,7 @@ def get_sync_data(bank, account, date):
         filters=[
             [dt, "bank", "=", bank],
             [dt, "bank_account", "=", account],
-            [dt, "modified": "between", [
+            [dt, "modified", "between", [
                 date + " 00:00:00",
                 date + " 23:59:59"
             ]]

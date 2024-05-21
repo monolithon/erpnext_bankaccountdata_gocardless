@@ -5,6 +5,7 @@
 
 
 import frappe
+from frappe import _
 
 
 # [Schedule, Internal]
@@ -56,6 +57,8 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     if isinstance(client, dict):
         client["disabled"] = 1
         return client
+    
+    from frappe.utils import cint
     
     from .datetime import (
         now_utc,
@@ -139,6 +142,8 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
 
 # [Internal]
 def get_dates_list(from_dt, to_dt):
+    from frappe.utils import cint
+    
     from .datetime import (
         to_date,
         to_date_obj,
@@ -151,7 +156,6 @@ def get_dates_list(from_dt, to_dt):
     last_date = from_obj
     ret = []
     for i in range(0, diff, 2):
-        total += 1
         if i > 0:
             last_date = add_date(last_date, days=1)
         
@@ -197,6 +201,8 @@ def queue_bank_transactions_sync(
     
     job_id = f"gocardless-bank-transactions-sync-{account}"
     if not is_job_running(job_id):
+        import uuid
+        
         from .background import enqueue_job
         
         enqueue_job(
@@ -237,7 +243,7 @@ def sync_bank_transactions(
     from .cache import set_cache
     
     set_cache(_SYNC_KEY_, account, True, 1500)
-    result = _dict({
+    result = frappe._dict({
         "entries": [],
         "synced": False,
     })
@@ -408,6 +414,8 @@ def new_bank_transaction(
             
             enable_currencies([data["currency"]])
     
+    from frappe.utils import flt
+    
     data["amount"] = flt(data["amount"])
     def_amount = 0.0
     if data["amount"] >= def_amount:
@@ -420,8 +428,10 @@ def new_bank_transaction(
     dt = "Bank Transaction"
     status = "Pending" if status == "pending" else "Settled"
     if not frappe.db.exists(dt, {"transaction_id": data["transaction_id"]}):
+        from .datetime import reformat_date
+        
         try:
-            entry_data = _dict({
+            entry_data = frappe._dict({
                 "date": reformat_date(data["date"]),
                 "status": status,
                 "bank_account": bank_account,
@@ -585,7 +595,7 @@ def handle_transaction_customer(settings, entry, account_bank, data):
                 "data": data["customer"],
                 "exception": str(exc)
             })
-            ignore_supplier = True
+            ignore_customer = True
     else:
         entry.party_type = dt
         entry.party = frappe.db.get_value(dt, {"customer_name": name}, "name")

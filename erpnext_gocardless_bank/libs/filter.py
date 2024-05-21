@@ -8,14 +8,14 @@ import frappe
 
 
 # [G Settings]
-def companies_filter(names: list, attrs: dict | None = None):
+def companies_filter(names: list, attrs: dict|None=None):
     return all_filter("Company", "name", names, attrs)
 
 
 # [Internal]
 def all_filter(
-    dt: str, field: str | list, names: list, attrs: dict | None = None,
-    enabled: bool | None = None, status_col: str = "disabled", status_val: int = 0
+    dt: str, field: str|list, names: list, attrs: dict|None=None,
+    enabled: bool|None=None, status_col: str="disabled", status_val: int=0
 ):
     if isinstance(field, str):
         field = [field]

@@ -26,6 +26,8 @@ def get_currencies_status():
     if not data or not isinstance(data, list):
         data = {}
     else:
+        from frappe.utils import cint
+        
         data = {v["name"]:cint(v["enabled"]) for v in data}
     
     from .cache import set_cache

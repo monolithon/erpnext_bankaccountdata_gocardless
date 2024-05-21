@@ -137,6 +137,8 @@ def sync_bank(name, trigger):
         from_dt = None
         to_dt = today
         if v.last_sync:
+            from frappe.utils import cint
+            
             from_dt = reformat_date(v.last_sync)
             from_obj = to_date_obj(from_dt)
             diff = now - from_obj
@@ -194,7 +196,7 @@ def update_bank_accounts_status():
             [dt, "auth_id", "!=", ""],
             [dt, "auth_status", "=", "Linked"]
         ],
-        pluck="name"
+        pluck="name",
         ignore_permissions=True,
         strict=False
     )
@@ -222,7 +224,6 @@ def update_bank_accounts_status():
         return 0
     
     from .bank_account import update_bank_account_data
-    from .common import to_json
     from .system import get_client
             
     client = get_client()

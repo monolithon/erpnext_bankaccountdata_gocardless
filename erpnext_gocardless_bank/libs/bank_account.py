@@ -156,7 +156,7 @@ def get_bank_account_data(account):
     
     data = data.pop(0)
     ret = {
-        "bank_account": bank_account,
+        "bank_account": account,
         "status": data["status"]
     }
     if data["status"] == "Ready":
@@ -224,6 +224,8 @@ def get_client_bank_accounts(company, bank, auth_id, publish=False):
                 "account": v
             })
             continue
+        
+        from .common import to_json
         
         v = {"id": v}
         v.update(va)
