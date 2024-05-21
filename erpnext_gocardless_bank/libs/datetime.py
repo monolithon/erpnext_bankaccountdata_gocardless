@@ -71,7 +71,7 @@ def reformat_date(dt: str, df=None):
         return formatdate(dt, DATE_FORMAT)
     except Exception:
         try:
-            ret = to_date_obj(dt);
+            ret = to_date_obj(dt)
             if ret:
                 return ret.strftime(DATE_FORMAT)
         except Exception:

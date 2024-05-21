@@ -23,6 +23,8 @@ def add_account_type(name):
         clear_doc_cache(dt)
         return 1
     except Exception as exc:
+        from frappe import _
+        
         from .common import store_error, log_error
         
         store_error({

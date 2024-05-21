@@ -5,6 +5,7 @@
 
 
 import frappe
+from frappe import _
 
 
 # [G Bank, G Bank Form]

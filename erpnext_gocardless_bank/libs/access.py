@@ -44,6 +44,8 @@ def update_access(row, client, now, _all=False):
     if _all and "refresh" not in data:
         return -1
     
+    from frappe.utils import cint
+    
     from .datetime import add_datetime
     
     if "refresh" in data:

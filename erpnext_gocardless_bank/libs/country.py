@@ -20,7 +20,7 @@ def get_country_code(country: str):
 
 # [Bank]
 def country_code_exists(code: str):
-    return frappe.db.exists({
+    return not (frappe.db.exists({
         "doctype": "Country",
         "code": code
-    }) != None
+    }) is None)

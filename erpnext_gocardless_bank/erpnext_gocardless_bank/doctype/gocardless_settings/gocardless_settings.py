@@ -118,7 +118,7 @@ class GocardlessSettings(Document):
         
         exist = companies_filter(
             [v.company for v in self.access if v.company],
-            {is_group: 0}
+            {"is_group": 0}
         )
         for i, v in enumerate(self.access):
             if not v.company:
