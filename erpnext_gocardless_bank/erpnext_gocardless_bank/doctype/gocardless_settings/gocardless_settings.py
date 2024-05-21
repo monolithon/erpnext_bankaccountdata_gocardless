@@ -83,21 +83,21 @@ class GocardlessSettings(Document):
         ign = "Ignore"
         if (
             self.clean_currency and
-            self.bank_account_currency_doesnt_exist === ign and
-            self.bank_transaction_currency_doesnt_exist === ign
+            self.bank_account_currency_doesnt_exist == ign and
+            self.bank_transaction_currency_doesnt_exist == ign
         ):
             self.clean_currency_dt = 0
         if (
             self.clean_supplier and (
-                self.supplier_exist_in_transaction === ign or
-                self.supplier_in_transaction_doesnt_exist === ign
+                self.supplier_exist_in_transaction == ign or
+                self.supplier_in_transaction_doesnt_exist == ign
             )
         ):
             self.clean_supplier_dt = 0
         if (
             self.clean_customer and (
-                self.customer_exist_in_transaction === ign or
-                self.customer_in_transaction_doesnt_exist === ign
+                self.customer_exist_in_transaction == ign or
+                self.customer_in_transaction_doesnt_exist == ign
             )
         ):
             self.clean_customer_dt = 0
