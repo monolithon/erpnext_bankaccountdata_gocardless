@@ -29,7 +29,7 @@ def after_sync():
         return 0
     
     doctypes = get_doctypes()[2:]
-    doctypes = doctypes.reverse()
+    doctypes.reverse()
     doc = frappe.get_doc(dt, name)
     for v in doc.links:
         if (
