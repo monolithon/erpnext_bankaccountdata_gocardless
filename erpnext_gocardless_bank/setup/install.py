@@ -21,32 +21,23 @@ def before_install():
 
 # [Hooks]
 def after_sync():
-    from .uninstall import get_doctypes
-    
     dt = "Workspace"
     name = "ERPNext Integrations"
     if not frappe.db.exists(dt, name):
         return 0
     
-    doctypes = get_doctypes()[2:]
-    doctypes.reverse()
-    doc = frappe.get_doc(dt, name)
-    for v in doc.links:
-        if (
-            v.type == "Link" and (
-                v.link_to in doctypes or
-                (
-                    v.link_to == "Mpesa Settings" and
-                    not frappe.db.exists("DocType", v.link_to)
-                )
-            )
-        ):
-            try:
-                doc.links.remove(v)
-            except Exception:
-                pass
+    from .uninstall import (
+        clean_workspace,
+        get_doctypes
+    )
     
-    for v in doctypes:
+    doc = frappe.get_doc(dt, name)
+    if doc.links:
+        clean_workspace(doc, False)
+    
+    doctypes = get_doctypes(True)
+    for i in range(len(doctypes)):
+        v = doctypes.pop(0)
         doc.append("links", {
             "dependencies": "",
             "hidden": 0,
@@ -59,4 +50,7 @@ def after_sync():
             "type": "Link"
         })
     
-    doc.save(ignore_permissions=True)
+    try:
+        doc.save(ignore_permissions=True)
+    except Exception:
+        pass

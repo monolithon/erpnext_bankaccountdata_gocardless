@@ -336,6 +336,7 @@ frappe._gc_access = {
         frm._set.html.add(cdn);
         let field = frappe.gc().get_rmfield(frm, 'access', cdn, 'access_html');
         if (!field || !field.$wrapper) return;
+        let module = frappe.gc().module;
         field.$wrapper.html('\
 <div class="row m-0 p-0">\
     <div class="col-md-6 col-12">\
@@ -355,7 +356,15 @@ frappe._gc_access = {
     <div class="col-md-6 col-12">\
         <h4>' + __('Privacy Policy') + '</h4>\
         <div class="text-justify">\
-            ' + __('This app doesn\'t collect any information . Registration is not required to use the Application.') + '\
+            ' + [
+                __('<strong>{0}</strong> is an app that links between <strong>Gocardless</strong> and <strong>ERPNext</strong> for the purpose of synchronizing <strong>Banks</strong>, <strong>Bank Accounts</strong> and <strong>Bank Transactions</strong> only.', [module]),
+                __('<strong>{0}</strong> app doesn\'t collect any of the information, provided and synchronized, and everything is stored locally within <strong>ERPNext</strong> database.', [module]),
+                __('Both <strong>Login</strong> and <strong>Sign Up</strong> are fully handled by <strong>Gocardless</strong> directly and without any interference from <strong>{0}</strong> app and anyone else.', [module]),
+                __('<strong>Secret ID</strong> and <strong>Secret Key</strong> provided are only used to obtain the <strong>Access Token</strong> that is required for authorizing the communication with <strong>Gocardless</strong> Open Banking API service.'),
+            ].join(' ') + '\
+        </div>\
+        <div class="w-100">\
+            ' + __('If you have any question or concern regarding <strong>{0}</strong> app, please feel free to contact us by sending an email to <strong>{1}</strong>.', [module, 'erpnextgc@monolithon.com']) + '\
         </div>\
     </div>\
 </div>\

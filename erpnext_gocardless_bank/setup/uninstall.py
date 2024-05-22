@@ -9,7 +9,13 @@ import frappe
 
 # [Hooks, Install]
 def after_uninstall():
-    doctypes = get_doctypes()
+    dt = "Workspace"
+    name = "ERPNext Integrations"
+    if frappe.db.exists(dt, name):
+        doc = frappe.get_doc(dt, name)
+        if doc.links:
+            clean_workspace(doc)
+    
     docs = [
         ["Custom Field", [
             "Bank-from_gocardless",
@@ -22,17 +28,15 @@ def after_uninstall():
             "Bank Account-gocardless_bank_account_no",
             "Bank Transaction-gocardless_transaction_info"
         ]],
-        ["DocType", doctypes],
+        ["DocType", get_doctypes()],
         ["Module Def", ["ERPNext Gocardless Bank"]]
     ]
-    
-    _remove_workspace_links(doctypes)
-    
-    for doc in docs:
-        for name in doc[1]:
+    for i in range(len(docs)):
+        doc = docs.pop(0)
+        for x in range(len(doc[1])):
             try:
                 frappe.delete_doc(
-                    doc[0], name,
+                    doc[0], doc[1].pop(0),
                     ignore_permissions=True,
                     ignore_missing=True,
                     ignore_on_trash=True,
@@ -45,32 +49,41 @@ def after_uninstall():
 
 
 # [Install, Internal]
-def get_doctypes():
-    return [
+def get_doctypes(for_links=False):
+    docs = [
         "Gocardless Bank Account",
         "Gocardless Access",
         "Gocardless Sync Log",
         "Gocardless Bank",
         "Gocardless Settings"
     ]
+    if for_links:
+        docs = docs[2:]
+        docs.reverse()
+    
+    return docs
 
 
-# [Internal]
-def _remove_workspace_links(doctypes):
-    dt = "Workspace"
-    name = "ERPNext Integrations"
-    if not frappe.db.exists(dt, name):
+# [Install, Internal]
+def clean_workspace(doc, save=True):
+    doctypes = get_doctypes()
+    links = []
+    for v in doc.links:
+        if v.link_to and v.link_to in doctypes:
+            links.append(v)
+    
+    doctypes.clear()
+    if not links:
         return 0
     
-    doc = frappe.get_doc(dt, name)
-    found = 0
-    for v in doc.links:
-        if v.type == "Link" and v.link_to in doctypes:
-            try:
-                doc.links.remove(v)
-                found = 1
-            except Exception:
-                pass
+    for i in range(len(links)):
+        doc.links.remove(links.pop(0))
     
-    if found:
+    if not save:
+        return 0
+    
+    try:
         doc.save(ignore_permissions=True)
+    except Exception:
+        pass
+    
