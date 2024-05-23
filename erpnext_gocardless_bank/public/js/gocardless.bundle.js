@@ -33,13 +33,14 @@
             if (this.$isObjLike(v)) for (let k in v) { if (this.$hasProp(k, v)) return false; }
             return true;
         },
-        $isBaseObj(v) { return this.$is(v, 'Object'); },
+        $isBaseObj(v) { return !this.$isArgs(v) && this.$is(v, 'Object'); },
         $isBaseObjVal(v) { return this.$isBaseObj(v) && !this.$isEmptyObj(v); },
         $fnStr(v) { return Function.prototype.toString.call(v); },
         $isObj(v, _) {
+            if (!this.$isObjLike(v)) return false;
             let k = 'constructor';
-            return this.$isObjLike(v) && (v = Object.getPrototypeOf(v))
-                && this.$hasProp(k, v) && this.$isFunc(v[k])
+            v = Object.getPrototypeOf(v);
+            return this.$hasProp(k, v) && this.$isFunc(v[k])
                 && (!_ || this.$fnStr(v[k]) === this.$fnStr(Object));
         },
         $isObjVal(v) { return this.$isObj(v) && !this.$isEmptyObj(v); },
@@ -57,33 +58,34 @@
         $filter(v, fn) {
             fn = this.$fn(fn) || function(v) { return v != null; };
             let o = this.$isBaseObj(v), r = o ? {} : [];
-            if (o) for (let k in v) if (this.$hasProp(k, v) && fn(v[k], k) !== false) r[k] = v[k];
-            else for (let i = 0, x = 0, l = v.length; i < l; i++) if (fn(v[i], i) !== false) r[x++] = v[i];
+            if (o) for (let k in v) { if (this.$hasProp(k, v) && fn(v[k], k) !== false) r[k] = v[k]; }
+            else for (let i = 0, x = 0, l = v.length; i < l; i++) { if (fn(v[i], i) !== false) r[x++] = v[i]; }
             return r;
         },
         $map(v, fn) {
             if (!(fn = this.$fn(fn))) return this.$clone(v);
             let o = this.$isBaseObj(v), r = o ? {} : [];
-            if (o) for (let k in v) this.$hasProp(k, v) && (r[k] = fn(v[k], k));
-            else for (let i = 0, x = 0, l = v.length; i < l; i++) r[x++] = fn(v[i], i);
+            if (o) for (let k in v) { if (this.$hasProp(k, v)) r[k] = fn(v[k], k); }
+            else for (let i = 0, x = 0, l = v.length; i < l; i++) { r[x++] = fn(v[i], i); }
             return r;
         },
         $assign() {
-            let a = arguments.length && this.$filter(arguments, this.$isBaseObjVal);
+            let a = arguments.length && this.$filter(arguments, this.$isBaseObj);
             if (!a || !a.length) return {};
             a.length > 1 && Object.assign.apply(null, a);
             return a[0];
         },
         $extend() {
-            let a = arguments.length && this.$filter(arguments, this.$isBaseObjVal);
+            let a = arguments.length && this.$filter(arguments, this.$isBaseObj);
             if (!a || a.length < 2) return a && a.length ? a[0] : {};
             let d = this.$isBool(arguments[0]) && arguments[0];
-            for (let i = 1, l = a.length; i < l; i++)
+            for (let i = 1, l = a.length; i < l; i++) {
                 for (let k in a[i]) {
                     if (!this.$hasProp(k, a[i]) || a[i][k] == null) continue;
                     d && this.$isBaseObj(a[0][k]) && this.$isBaseObj(a[i][k])
                         ? this.$extend(d, a[0][k], a[i][k]) : (a[0][k] = a[i][k]);
                 }
+            }
             return a[0];
         },
         $fn(fn, o) { if (this.$isFunc(fn)) return fn.bind(o || this); },
@@ -121,27 +123,27 @@
                 },
                 call() { this._fn(arguments); },
                 delay() { this._fn(arguments, 1); },
-                cancel() { this._r && (this._r = clearTimeout(this._r)); },
+                cancel() { if (this._r) this._r = clearTimeout(this._r); },
             };
         },
         $def(v, o) { return this.$ext(v, o, 0); },
         $xdef(v, o) { return this.$ext(v, o, 0, 1); },
         $static(v, o) { return this.$ext(v, o, 1); },
         $ext(v, o, s, e) {
-            for (let k in v) this.$hasProp(k, v) && this.$getter(k, v[k], s, e, o);
+            for (let k in v) { if (this.$hasProp(k, v)) this.$getter(k, v[k], s, e, o); }
             return this;
         },
         $getter(k, v, s, e, o) {
             o = o || this;
-            !s && k[0] === '_' && (k = k.substring(1));
-            !s && (o['_' + k] = v);
-            (s || (e && o[k] == null)) && Object.defineProperty(o, k, s ? {value: v} : {get() { return this['_' + k]; }});
+            if (!s && k[0] === '_') k = k.substring(1);
+            if (!s) o['_' + k] = v;
+            if (s || (e && o[k] == null)) Object.defineProperty(o, k, s ? {value: v} : {get() { return this['_' + k]; }});
             return this;
         },
         $hasElem(id) { return !!document.getElementById(id); },
         $makeElem(tag, opt) {
             let $el = document.createElement(tag);
-            if (opt) for (let k in opt) $el[k] = opt[k];
+            if (opt) for (let k in opt) { $el[k] = opt[k]; }
             return $el;
         },
         $loadJs(src, opt) {
@@ -163,9 +165,9 @@
     
     
     class LevelUpCore {
-        destroy() { for (let k in this) this.$hasProp(k) && delete this[k]; }
+        destroy() { for (let k in this) { if (this.$hasProp(k)) delete this[k]; } }
     }
-    LU.$assign(LevelUpCore.prototype, LU);
+    LU.$extend(LevelUpCore.prototype, LU);
     frappe.LevelUpCore = LevelUpCore;
     
     
@@ -179,6 +181,7 @@
             this._real = this._key + '_';
             this._pfx = '[' + this._key.toUpperCase() + ']';
             this._ns = ns + (!ns.endsWith('.') ? '.' : '');
+            this._prod = prod;
             this._events = {
                 list: {},
                 real: {},
@@ -313,7 +316,7 @@
         }
         _off(e, fn) {
             if (e && fn) this._del(e, fn);
-            else if (!e) for (let ev in this._events.list) (fn ? this._off : this._del)(ev, fn);
+            else if (!e) for (let ev in this._events.list) { (fn ? this._off : this._del)(ev, fn); }
             else {
                 let es = this._events;
                 es.real[e] && frappe.realtime.off(e, es.real[e]);
@@ -345,14 +348,23 @@
             for (let k = ['router', 'route'], i = 0, l = k.length; i < l; i++)
                 frappe[k[i]] && (o._router.obj = frappe[k[i]]) && (i < 1 || (o._router.old = 1));
             this._reg(o, 'on');
+            this.get(o);
         },
         off(o) { this._reg(o, 'off') && (o._router.obj = o._router.old = null); },
         get(o) {
-            let v;
+            let d = ['app'], v;
+            if (!o._router.val) o._router.val = d;
             try { o._router.obj && (v = !o._router.old ? frappe.get_route() : o._router.obj.parse()); } catch(_) {}
-            if (!LU.$isArrVal(v)) return;
+            if (!LU.$isArrVal(v)) {
+                o._router.val = d;
+                return false;
+            }
             v[0] = v[0].toLowerCase();
-            o._router.val = v;
+            let f = LU.$filter(v, function(z, i) {
+                return o._router.val.indexOf(z) !== i;
+            });
+            if (f.length) o._router.val = v;
+            return f.length > 0;
         },
         _reg(o, a) { (a = o._router.obj && o._router.obj[a]) && a('change', o._win.e.change); },
     },
@@ -368,16 +380,17 @@
         reload_field(f, k, r, c) {
             if (r == null && !c) {
                 if (LU.$isStrVal(k)) k = [k];
-                if (LU.$isArrVal(k))
+                if (LU.$isArrVal(k)) {
                     for (let i = 0, l = k.length; i < l; i++)
                         f.refresh_field && f.refresh_field(k[i]);
+                }
                 return;
             }
             if (r != null && !c) {
                 if (!LU.$isArr(r)) r = [r];
                 if (!LU.$isArrVal(r)) return;
                 f = this.get_field(f, k, 1);
-                for (let i = 0, l = r.length; i < l; i++) f && f.refresh_row(r[i]);
+                for (let i = 0, l = r.length; i < l; i++) { f && f.refresh_row(r[i]); }
                 return;
             }
             if (LU.$isStrVal(c)) c = [c];
@@ -401,19 +414,19 @@
             }
         },
         field_prop(f, k, g, r, c, p, v, t) {
-            if (LU.$isBaseObj(k)) for (let x in k) this.field_prop(f, x, g, r, c, k[x], null, t);
-            else if (LU.$isBaseObj(c)) for (let x in c) this.field_prop(f, k, g, r, x, c[x], null, t);
+            if (LU.$isBaseObj(k)) for (let x in k) { this.field_prop(f, x, g, r, c, k[x], null, t); }
+            else if (LU.$isBaseObj(c)) for (let x in c) { this.field_prop(f, k, g, r, x, c[x], null, t); }
             else {
                 (g || r != null) && (t || (f = this.get_field(f, k, g, r))) && (k = c);
                 let m = r != null ? 'set_field_property' : (g ? 'update_docfield_property' : 'set_df_property');
                 if (!LU.$isBaseObj(p)) f[m](k, p, v);
-                else for (let x in p) f[m](k, x, p[x]);
+                else for (let x in p) { f[m](k, x, p[x]); }
                 g && r == null && f.debounced_refresh();
             }
         },
         toggle_field(f, k, g, r, c, e, i) {
             k && (f = this.get_field(f, k, g, r, c));
-            e = e ? 0 : 1
+            e = e ? 0 : 1;
             if ((k && (!f || !f.df)) || cint(f.df.hidden) || (i && f.df._ignore) || cint(f.df.read_only) === e) return;
             this.field_prop(f, k, g, r, c, 'read_only', e, 1);
             this._toggle_translatable(f, e ? 1 : 0);
@@ -495,7 +508,7 @@
                     for (let ds = this._docfields(f), i = 0, l = ds.length, d; i < l; i++)
                         (d = ds[i]) && !d._ignore && f._.read.includes(d.fieldname) && (d.read_only = 0);
                 }
-                if (k && f._) for (let x = ['edit', 'grid', 'static', 'read'], i = 0; i < 4; i++) delete f._[k[x]];
+                if (k && f._) for (let x = ['edit', 'grid', 'static', 'read'], i = 0; i < 4; i++) { delete f._[k[x]]; }
                 return 1;
             }
             (f._ = f._ || {}) && (f._.edit = f.df.in_place_edit);
@@ -559,8 +572,8 @@
                 },
                 c: 0,
                 fn: this.$proxy(function(n) {
+                    if (this._win.c || !LUR.get(this)) return;
                     this._win.c++;
-                    LUR.get(this);
                     this.emit((n ? 'page_change' : 'page_pop') + ' page_clean');
                     this.$timeout(function() { this._win.c--; }, n ? 2000 : 1200);
                 }, 200),
@@ -667,8 +680,8 @@
             if (!(f = this.get_form(f)) || (f[this._tmp] && !f[this._tmp].disabled)) return this;
             try {
                 if (this.$isArrVal(f.fields))
-                    for (let i = 0, l = f.fields.length, c, k; i < l; i++) {
-                        if (!(c = f.fields[i]) || !(k = c.df.fieldname)) continue;
+                    for (let i = 0, l = f.fields.length, c; i < l; i++) {
+                        if (!(c = f.fields[i]) || !c.df.fieldname) continue;
                         if (LUF.is_table(c)) LUT.toggle_table(c, 0, 1, 0, 1);
                         else if (LUF.is_field(c)) LUF.toggle_field(c, 0, 0, null, 0, 1, 1);
                     }
@@ -685,8 +698,8 @@
             if (!(f = this.get_form(f)) || (f[this._tmp] && f[this._tmp].disabled)) return this;
             try {
                 if (this.$isArrVal(f.fields))
-                    for (let i = 0, l = f.fields.length, c, k; i < l; i++) {
-                        if (!(c = f.fields[i]) || !(k = c.df.fieldname)) continue;
+                    for (let i = 0, l = f.fields.length, c; i < l; i++) {
+                        if (!(c = f.fields[i]) || !c.df.fieldname) continue;
                         if (LUF.is_table(c)) LUT.toggle_table(c, 0, 0, 0, 1);
                         else if (LUF.is_field(c)) LUF.toggle_field(c, 0, 0, null, 0, 0, 1);
                     }
@@ -862,7 +875,7 @@
         constructor(n) {
             this._c = [];
             this._n = (n || 0) + 1;
-            for (let x = 0; x < this._n; x++) this._c[x] = [];
+            for (let x = 0; x < this._n; x++) { this._c[x] = []; }
         }
         get length() { return this._c[0].length; }
         col(i) { return this._c[i || 0]; }
@@ -870,23 +883,24 @@
         has(v, i) { return (v = this.idx(v, i)) >= 0 && this.col(i)[v] != null; }
         add() {
             let a = arguments, i = this.idx(a[0]);
-            if (i < 0) for (let x = 0; x < this._n; x++) this._c[x].push(a[x]);
+            if (i < 0) for (let x = 0; x < this._n; x++) { this._c[x].push(a[x]); }
             else for (let x = 1; x < this._n; x++)
                 (a[x] != null || this._c[x][i] == null) && (this._c[x][i] = a[x]);
             return this;
         }
         del(v, i) {
-            if ((i = this.idx(v, i)) >= 0) for (let x = 0; x < this._n; x++) this._c[x].splice(i, 1);
+            if ((i = this.idx(v, i)) >= 0)
+                for (let x = 0; x < this._n; x++) { this._c[x].splice(i, 1); }
             return this;
         }
         row(v, i) {
             if ((i = this.idx(v, i)) < 0) return;
             let r = [];
-            for (let x = 0; x < this._n; x++) r[x] = this._c[x][i];
+            for (let x = 0; x < this._n; x++) { r[x] = this._c[x][i]; }
             return r;
         }
         clear() {
-            for (let x = 0; x < this._n; x++) this._c[x] = [];
+            for (let x = 0; x < this._n; x++) { this._c[x] = []; }
             return this;
         }
     }
