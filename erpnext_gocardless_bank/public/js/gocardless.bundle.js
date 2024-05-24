@@ -898,6 +898,10 @@
             for (let x = 0; x < this._n; x++) { r[x] = this._c[x][i]; }
             return r;
         }
+        val(v, i, x) {
+            if ((i = this.idx(v, i)) < 0) return;
+            return this.col(x)[i];
+        }
         clear() {
             if (this.length) for (let x = 0; x < this._n; x++) { this._c[x] = []; }
             return this;
