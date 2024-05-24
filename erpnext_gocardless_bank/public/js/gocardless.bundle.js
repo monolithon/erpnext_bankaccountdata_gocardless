@@ -354,13 +354,12 @@
         get(o) {
             let d = ['app'], v;
             if (!o._router.val) o._router.val = d;
-            try { o._router.obj && (v = !o._router.old ? frappe.get_route() : o._router.obj.parse()); } catch(_) {}
-            if (!LU.$isArrVal(v)) {
-                o._router.val = d;
-                return false;
-            }
-            v[0] = v[0].toLowerCase();
-            let f = LU.$filter(v, function(z, i) {
+            try { if (o._router.obj) v = !o._router.old ? frappe.get_route() : o._router.obj.parse(); } catch(_) {}
+            if (!LU.$isArrVal(v)) v = d;
+            else v[0] = v[0].toLowerCase();
+            let f;
+            if (o._router.val.length !== v.length) f = d;
+            else f = LU.$filter(v, function(z, i) {
                 return o._router.val.indexOf(z) !== i;
             });
             if (f.length) o._router.val = v;
