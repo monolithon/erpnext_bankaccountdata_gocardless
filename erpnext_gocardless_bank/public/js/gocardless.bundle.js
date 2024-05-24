@@ -79,13 +79,12 @@
             let a = arguments.length && this.$filter(arguments, this.$isBaseObj);
             if (!a || a.length < 2) return a && a.length ? a[0] : {};
             let d = this.$isBool(arguments[0]) && arguments[0];
-            for (let i = 1, l = a.length; i < l; i++) {
+            for (let i = 1, l = a.length; i < l; i++)
                 for (let k in a[i]) {
                     if (!this.$hasProp(k, a[i]) || a[i][k] == null) continue;
                     d && this.$isBaseObj(a[0][k]) && this.$isBaseObj(a[i][k])
                         ? this.$extend(d, a[0][k], a[i][k]) : (a[0][k] = a[i][k]);
                 }
-            }
             return a[0];
         },
         $fn(fn, o) { if (this.$isFunc(fn)) return fn.bind(o || this); },
@@ -130,7 +129,7 @@
         $xdef(v, o) { return this.$ext(v, o, 0, 1); },
         $static(v, o) { return this.$ext(v, o, 1); },
         $ext(v, o, s, e) {
-            for (let k in v) { if (this.$hasProp(k, v)) this.$getter(k, v[k], s, e, o); }
+            for (let k in v) { this.$hasProp(k, v) && this.$getter(k, v[k], s, e, o); }
             return this;
         },
         $getter(k, v, s, e, o) {
@@ -260,7 +259,7 @@
                     (f = this.$fn(f)) ? f({message: r}) : this._error(r);
                 })
             };
-            !this.$isBaseObj(a) && (a = {});
+            if (!this.$isBaseObj(a)) a = {});
             this.call('on_request', a);
             !this.$isEmptyObj(a) && this.$assign(d, {type: 'POST', args: a});
             try { frappe.call(d); } catch(e) {
@@ -375,45 +374,39 @@
         is_field(f) { return f && f.df && !/^((Tab|Section|Column) Break|Table)$/.test(f.df.fieldtype); },
         is_table(f) { return f && f.df && f.df.fieldtype === 'Table'; },
         get_field(f, k, g, r, c, m) {
-            return ((f = f.get_field(k)) && (!g || ((f = f.grid)
-                && (r == null || ((f = f.get_row(r)) && (!m || (f = f.grid_form))))))
-                && (!c || (f = r != null && m ? f.fields_dict[c] : f.get_field(c))) && f) || null;
+            try {
+                return ((f = f.get_field(k)) && (!g || ((f = f.grid)
+                    && (r == null || ((f = f.get_row(r)) && (!m || (f = f.grid_form))))))
+                    && (!c || (f = r != null && m ? f.fields_dict[c] : f.get_field(c))) && f) || null;
+            } catch(_) {}
         },
         reload_field(f, k, r, c) {
-            if (r == null && !c) {
-                if (LU.$isStrVal(k)) k = [k];
-                if (LU.$isArrVal(k)) {
-                    for (let i = 0, l = k.length; i < l; i++)
-                        f.refresh_field && f.refresh_field(k[i]);
-                }
-                return;
-            }
             if (r != null && !c) {
-                if (!LU.$isArr(r)) r = [r];
-                if (!LU.$isArrVal(r)) return;
-                f = this.get_field(f, k, 1);
-                for (let i = 0, l = r.length; i < l; i++) { f && f.refresh_row(r[i]); }
+                if ((!LU.$isNum(r) && !LU.$isStrVal(r)) || !(f = this.get_field(f, k, 1))) return;
+                try { f.refresh_row(r); } catch(_) {}
                 return;
             }
-            if (LU.$isStrVal(c)) c = [c];
-            else if (!LU.$isArrVal(c)) return;
             if (r != null && c) {
-                let g = (f = this.get_field(f, k, 1, r)) && f.grid_form && f.grid_form.refresh_field;
-                for (let i = 0, l = c.length, x; i < l; i++) {
-                    (x = f && f.on_grid_fields_dict[c[i]]) && x.refresh && x.refresh();
-                    g && g(c[i]);
-                }
+                if (!LU.$isStrVal(c) || !(f = this.get_field(f, k, 1, r))) return;
+                try {
+                    (r = f.on_grid_fields_dict[c]) && r.refresh && r.refresh();
+                    (r = f.grid_form && f.grid_form.refresh_field) && r(c);
+                } catch(_) {}
                 return;
             }
-            if (!(f = this.get_field(f, k, 1)) || !LU.$isArrVal(f.grid_rows)) return;
-            for (let i = 0, l = f.grid_rows, cl = c.length, g; i < l; i++) {
-                r = f.grid_rows[i];
-                (g = r && r.grid_form) && (g = g.refresh_field);
-                for (let x = 0, z; x < cl; x++) {
-                    (z = r && r.on_grid_fields_dict[c[x]]) && z.refresh && z.refresh();
-                    g && g(c[x]);
-                }
+            if (!c) {
+                if (!LU.$isStrVal(k) || !f.refresh_field || !LU.$isArrVal(k)) return;
+                try { f.refresh_field(k); } catch(_) {}
+                return;
             }
+            if (!LU.$isStrVal(c) || !(f = this.get_field(f, k, 1)) || !LU.$isArrVal(f.grid_rows)) return;
+            try {
+                for (let i = 0, l = f.grid_rows, x; i < l; i++) {
+                    r = f.grid_rows[i];
+                    (x = r.on_grid_fields_dict[c]) && x.refresh && x.refresh();
+                    (x = r.grid_form && r.grid_form.refresh_field) && x(c);
+                }
+            } catch(_) {}
         },
         field_prop(f, k, g, r, c, p, v, t) {
             if (LU.$isBaseObj(k)) for (let x in k) { this.field_prop(f, x, g, r, c, k[x], null, t); }
@@ -421,9 +414,11 @@
             else {
                 (g || r != null) && (t || (f = this.get_field(f, k, g, r))) && (k = c);
                 let m = r != null ? 'set_field_property' : (g ? 'update_docfield_property' : 'set_df_property');
-                if (!LU.$isBaseObj(p)) f[m](k, p, v);
-                else for (let x in p) { f[m](k, x, p[x]); }
-                g && r == null && f.debounced_refresh();
+                try {
+                    if (!LU.$isBaseObj(p)) f[m](k, p, v);
+                    else for (let x in p) { f[m](k, x, p[x]); }
+                    g && r == null && f.debounced_refresh();
+                } catch(_) {}
             }
         },
         toggle_field(f, k, g, r, c, e, i) {
@@ -442,24 +437,30 @@
             !t && (f = this.get_field(f, k, g, r, c));
             f.df._description = f.df._description || this.get_field_desc(f, k, g, r, c, 0, 1);
             !LU.$isStrVal(m) && (m = '');
-            if (m.length && f.set_new_description) ++x && f.set_new_description(m);
-            else if (f.set_description) {
-                !m.length && ((m = f.df._description || '') || delete f.df._description);
-                ++x && f.set_description(m);
-            }
-            f.toggle_description && f.toggle_description(m.length > 0);
+            try {
+                if (m.length && f.set_new_description) ++x && f.set_new_description(m);
+                else if (f.set_description) {
+                    !m.length && ((m = f.df._description || '') || delete f.df._description);
+                    ++x && f.set_description(m);
+                }
+                f.toggle_description && f.toggle_description(m.length > 0);
+            } catch(_) {}
             return x;
         },
         field_status(f, k, g, r, c, m) {
             let v = LU.$isStrVal(m), tf = this.get_field(f, k, g, r, c), x = 0;
             if ((!v && tf.df.invalid) || (v && !tf.df.invalid))
-                ++x && ((tf.df.invalid = v ? 1 : 0) || 1) && tf.set_invalid && tf.set_invalid();
+                try {
+                    ++x && ((tf.df.invalid = v ? 1 : 0) || 1) && tf.set_invalid && tf.set_invalid();
+                } catch(_) {}
             this.field_desc(tf, k, g, r, c, m, 1) && x++;
             x && this.reload_field(f, k, r, c);
         },
         _toggle_translatable(f, s) {
-            f.df.translatable && f.$wrapper
-            && (f = f.$wrapper.find('.clearfix .btn-translation')) && f.hidden(!s);
+            try {
+                f.df.translatable && f.$wrapper
+                && (f = f.$wrapper.find('.clearfix .btn-translation')) && f.hidden(!s);
+            } catch(_) {}
         },
     },
     LUT = {
@@ -718,20 +719,20 @@
         get_rfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c); }
         get_r(f, k, r) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, 0, 1); }
         get_rmfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c, 1); }
-        reload_field(f) {
-            arguments.length > 1 && (f = this.get_form(f)) && LUF.reload_field(f, this.$toArr(arguments, 1));
+        reload_field(f, k) {
+            (f = this.get_form(f)) && LUF.reload_field(f, k);
             return this;
         }
-        reload_tfield(f, k) {
-            arguments.length > 2 && (f = this.get_form(f)) && LUF.reload_field(f, k, null, this.$toArr(arguments, 2));
+        reload_tfield(f, k, c) {
+            (f = this.get_form(f)) && LUF.reload_field(f, k, null, c);
             return this;
         }
-        reload_row(f, k) {
-            arguments.length > 2 && (f = this.get_form(f)) && LUF.reload_field(f, k, this.$toArr(arguments, 2));
+        reload_row(f, k, r) {
+            (f = this.get_form(f)) && LUF.reload_field(f, k, r);
             return this;
         }
-        reload_rfield(f, k, r) {
-            arguments.length > 3 && (f = this.get_form(f)) && LUF.reload_field(f, k, r, this.$toArr(arguments, 3));
+        reload_rfield(f, k, r, c) {
+            (f = this.get_form(f)) && LUF.reload_field(f, k, r, c);
             return this;
         }
         field_prop(f, k, p, v) {

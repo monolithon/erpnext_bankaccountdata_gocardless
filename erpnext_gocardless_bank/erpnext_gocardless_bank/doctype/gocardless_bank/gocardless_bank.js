@@ -10,8 +10,7 @@ frappe.ui.form.on('Gocardless Bank', {
     onload: function(frm) {
         frappe.gc()
             .on('ready change', function() { this.setup_form(frm); })
-            .on('page_change page_pop', function() { frm && delete frm._bank; })
-            .on('ready', function() { this.is_enabled && frm.events.check_link(frm); })
+            //.on('page_clean', function() { frm && delete frm._bank; })
             .on('on_alert', function(d, t) {
                 frm._bank.errs.includes(t) && (d.title = __(frm.doctype));
             });
@@ -28,6 +27,7 @@ frappe.ui.form.on('Gocardless Bank', {
             return {query: frappe.gc().get_method('search_companies')};
         });
         frm.events.check_status(frm);
+        frappe.gc().on('ready', function() { this.is_enabled && frm.events.check_link(frm); });
     },
     refresh: function(frm) {
         if (frm.doc.__needs_refresh) return frm.reload_doc();
