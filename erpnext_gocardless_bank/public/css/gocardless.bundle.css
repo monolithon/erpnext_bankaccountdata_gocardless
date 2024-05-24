@@ -1,3 +1,15 @@
+.gc-flex-wrapper {
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-pack: center;
+    justify-content: center;
+    -ms-flex-align: center;
+    align-items: center;
+    width: 100%;
+}
+.gc-mh-300 {
+    min-height: 300px;
+}
 .gc-table {
     table-layout: auto;
     margin-bottom: 0;

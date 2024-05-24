@@ -10,11 +10,8 @@ frappe.ui.form.on('Gocardless Settings', {
     onload: function(frm) {
         frappe.gc()
             .on('ready change', function() {
-                if (frm._set.debug == null && !this.is_debug) return;
-                if (this.is_debug !== frm._set.debug) {
-                    frm._set.debug = this.is_debug;
-                    frappe._gc_logs.setup(frm);
-                }
+                if (this.is_debug) frappe._gc_logs.init(frm);
+                else frappe._gc_logs.destroy(frm);
             })
             /*.on('page_clean', function() {
                 frm && frm.events.destroy_table(frm);
@@ -147,35 +144,79 @@ frappe.ui.form.on('Gocardless Access', {
 
 
 frappe._gc_logs = {
-    _event: 0,
-    _handler: null,
-    _list: null,
-    _dialog: null,
-    setup: function(frm) {
-        var $el = frm.get_field('logs_html').$wrapper;
-        this.destroy = frappe.gc().$afn(this.destroy, [$el], this);
-        
-        let val = frappe.gc().is_debug ? 1 : 0;
-        frm.toggle_display('logs_section', val);
-        frm.toggle_display('logs_html', val);
-        if (!val) {
-            frappe.gc().off('page_change page_pop', this.destroy);
-            return this.destroy();
-        }
-        frappe.gc().once('page_change page_pop', this.destroy);
-        !this._event && this._events($el);
-        if (this._list) return this._render($el);
+    _tpl: {},
+    _el: null,
+    init: function(frm) {
+        if (frm._set.logs) return;
+        frm._set.logs = 1;
+        this._destroy = frappe.gc().$afn(this.destroy, [frm], this);
+        frappe.gc().once('page_clean', this._destroy);
+        let $el = frm.get_field('logs_html').$wrapper;
+        this._events($el);
         if (!frappe.gc().$hasElem('gocardless-style'))
             frappe.gc().$loadCss(
                 '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
                 {id: 'gocardless-style'}
             );
+        $el.append('<div class="gc-flex-wrapper gc-mh-300 mt-2 mb-4 mx-md-2 mx-1"></div>');
+        $el = $el.find('.gc-flex-wrapper').first();
+        frm.toggle_display('logs_section', 1);
+        frm.toggle_display('logs_html', 1);
+        this._refresh($el);
+    },
+    destroy: function(frm) {
+        if (!frm._set.logs) return;
+        frm._set.logs = 0;
+        frm.toggle_display('logs_section', 0);
+        frm.toggle_display('logs_html', 0);
+        frappe.gc().off('page_clean', this._destroy);
+        let $el = frm.get_field('logs_html').$wrapper;
+        $el.off('click', 'button.refresh-logs', this._handlers.refresh);
+        $el.off('click', 'button.view-log', this._handlers.view);
+        $el.empty();
+        try { this._dialog && this._dialog.dialog('destroy'); } catch(_) {}
+        try { this._dialog.$wrapper && this._dialog.$wrapper.remove(); } catch(_) {}
+        this._tpl = {};
+        this._el = null;
+        delete this._destroy;
+        delete this._handlers;
+        delete this._list;
+        delete this._dialog;
+    },
+    _events: function($el) {
+        this._handlers = {
+            refresh: frappe.gc().$fn(function(e) {
+                this._refresh($el);
+            }, this),
+            view: frappe.gc().$fn(function(e) {
+                let $tr = $(e.target);
+                if (!$tr.is('tr')) $tr = $tr.parents('tr');
+                let name = $tr.attr('data-file-name');
+                if (frappe.gc().$isStrVal(name)) this._open(name);
+                else frappe.gc()._error('Log filename from attr is invalid.', name);
+            }, this),
+            remove: frappe.gc().$fn(function(e) {
+                var $tr = $(e.target);
+                if (!$tr.is('tr')) $tr = $tr.parents('tr');
+                var name = $tr.attr('data-file-name');
+                if (frappe.gc().$isStrVal(name)) this._remove(name, $tr);
+                else frappe.gc()._error('Log filename from attr is invalid.', name);
+            }, this),
+        };
+        $el.on('click', 'button.refresh-logs', this._handlers.refresh);
+        $el.on('click', 'button.view-log', this._handlers.view);
+        $el.on('click', 'button.remove-log', this._handlers.remove);
+    },
+    _refresh: function($el) {
+        if (this._refreshing) return;
+        this._refreshing = 1;
         this._loading($el);
         var me = this;
         frappe.gc().request(
             'get_log_files', null,
             function(ret) {
-                if (!this.$isArrVal(ret)) {
+                me._refreshing = 0;
+                if (!this.$isArr(ret)) {
                     this._error('Logs list received is invalid.', ret);
                     me._error($el);
                 } else {
@@ -184,95 +225,108 @@ frappe._gc_logs = {
                 }
             },
             function(e) {
+                me._refreshing = 0;
                 this._error('Failed to load logs list.', e.message, e.stack);
                 me._error($el);
             }
         );
     },
-    destroy: function($el) {
-        if (!this._event) return;
-        $el.empty().off('click', '.view-log', this._handler);
-        try { this._dialog && this._dialog.dialog('destroy'); } catch(_) {}
-        this._handler = null;
-        this._list = null;
-        this._dialog = null;
-        this._event--;
-    },
-    _events: function($el) {
-        this._handler = frappe.gc().$fn(function(e) {
-            let $btn = $(e.target);
-            if (!$btn.is('button')) $btn = $btn.find('button.view-log').first();
-            let name = $btn.attr('data-file-name');
-            if (frappe.gc().$isStrVal(name)) this._open(name);
-            else frappe.gc()._error('Log filename from button attr is invalid.', name);
-        }, this);
-        $el.on('click', 'button.view-log', this._handler);
-        this._event++;
+    _toggle: function($el, key) {
+        let $e;
+        if (this._el) {
+            $e = $el.find('.' + this._el);
+            !$e.isHidden() && $e.hidden(1);
+        }
+        this._el = key;
+        $e = $el.find('.' + this._el);
+        $e.isHidden() && $e.hidden(0);
     },
     _loading: function($el) {
-        $el.empty().html('\
-<div class="w-100 mb-4 mx-md-2 mx-1 text-center">\
-    <div class="spinner-border text-info m-2" role="status">\
+        if (!this._tpl.loading) {
+            this._tpl.loading = 1;
+            $el.append('\
+<div class="logs-loading text-center lu-hidden">\
+    <div class="spinner-border text-info" role="status">\
         <span class="sr-only">' + __('Loading') + '</span>\
     </div>\
     <div class="text-center text-info">\
         ... ' + __('Loading Logs') + ' ...\
     </div>\
 </div>\
-        ');
+            ');
+        }
+        this._toggle($el, 'logs-loading');
     },
     _error: function($el, message) {
-        $el.empty().html('\
-<div class="w-100 mb-4 mx-md-2 mx-1">\
-    <div class="text-center ' + (message ? 'text-mute' : 'text-danger') + '">\
-        ' + (message || __('Failed to load the list of logs.')) + '\
-    </div>\
+        if (!this._tpl.error) {
+            this._tpl.error = 1;
+            $el.append('\
+<div class="logs-error text-center text-danger lu-hidden">\
+    ' + __('Failed to list logs files.') + '\
 </div>\
-        ');
+            ');
+        }
+        this._toggle($el, 'logs-error');
     },
     _render: function($el) {
-        $el.empty().html('\
-<div class="table-responsive w-100 mb-4 mx-md-2 mx-1">\
-    <table class="table table-bordered table-hover gc-table">\
-        <thead class="thead-dark">\
-            <tr>\
-                <th scope="col">' + __('File') + '</th>\
-                <th>' + __('Action') + '</th>\
-            </tr>\
-        </thead>\
-        <tbody>\
-            ' + (this._list.length
-                ? frappe.gc().$map(this._list, function(v) {
-                    return '\
-            <tr>\
-                <td scope="row">' + v + '</td>\
-                <td>\
-                    <button type="button" class="btn btn-default btn-sm view-log" data-file-name="' + v + '">\
-                        ' + __('View') + '\
-                    </button>\
-                </td>\
-            </tr>\
-                    ';
-                }).join('\n')
-                : '\
-            <tr>\
-                <td colspan="2" class="text-center text-mute">\
-                    ' + __('No log files found.') + '\
-                </td>\
-            </tr>\
-                '
-            ) + '\
-        </tbody>\
-    </table>\
+        if (!this._tpl.table) {
+            this._tpl.table = 1;
+            $el.append('\
+<div class="logs-table w-100 lu-hidden">\
+    <div class="w-100 mb-1">\
+        <button type="button" class="btn btn-default btn-sm refresh-logs">\
+            ' + __('Refresh') + '\
+        </button>\
+    </div>\
+    <div class="table-responsive w-100">\
+        <table class="table table-bordered table-hover gc-table">\
+            <thead class="thead-dark">\
+                <tr>\
+                    <th scope="col">' + __('File') + '</th>\
+                    <th>' + __('Action') + '</th>\
+                </tr>\
+            </thead>\
+            <tbody class="gc-table-body">\
+            </tbody>\
+        </table>\
+    </div>\
 </div>\
-        ');
+            ');
+        }
+        $el.find('.gc-table-body').first().empty().append(
+            this._list && this._list.length
+            ? frappe.gc().$map(this._list, function(v) {
+                return '\
+                <tr data-file-name="' + v + '">\
+                    <td scope="row">' + v + '</td>\
+                    <td>\
+                        <div class="btn-group btn-group-sm">\
+                            <button type="button" class="btn btn-default btn-sm view-log">\
+                                ' + __('View') + '\
+                            </button>\
+                            <button type="button" class="btn btn-danger btn-sm remove-log">\
+                                ' + __('Remove') + '\
+                            </button>\
+                        </div>\
+                    </td>\
+                </tr>\
+                        ';
+            }).join('\n')
+            : '\
+                <tr>\
+                    <td colspan="2" class="text-center text-mute">\
+                        ' + __('No log files found.') + '\
+                    </td>\
+                </tr>\
+            '
+        );
+        this._toggle($el, 'logs-table');
     },
     _open: function(name) {
         if (!this._dialog) this._make();
         this._dialog.set_title(__('Log File: {0}', [name]));
         this._dialog.toggle_loading();
         this._dialog.show();
-        
         var me = this;
         frappe.gc().request(
             'load_log_file',
@@ -282,7 +336,7 @@ frappe._gc_logs = {
                 else me._dialog.toggle_content(ret);
             },
             function(e) {
-                this._error('Failed to load the log file content.', name, e.message, e.stack);
+                this._error('Failed to load the log file content.', name, e.message);
                 me._dialog.toggle_error();
             }
         );
@@ -321,10 +375,50 @@ frappe._gc_logs = {
             this.set_value('file_content', v);
             this._toggle_fields(2);
         };
-        this._loading(this._dialog.get_field('file_loading').$wrapper);
-        this._error(
-            this._dialog.get_field('file_error').$wrapper,
-            __('Log file is empty or does not exist.')
+        this._dialog.get_field('file_loading').$wrapper.html('\
+<div class="gc-flex-wrapper gc-mh-300 mx-md-2 mx-1 text-center">\
+    <div class="spinner-border text-info" role="status">\
+        <span class="sr-only">' + __('Loading') + '</span>\
+    </div>\
+</div>\
+        ');
+        this._dialog.get_field('file_error').$wrapper.html('\
+<div class="gc-flex-wrapper gc-mh-300 mx-md-2 mx-1 text-center text-mute">\
+    ' + __('Log file is empty, does not exist or failed to be loaded.') + '\
+</div>\
+        ');
+            
+        );
+    },
+    _remove: function(name, $tr) {
+        frappe.warn(
+            __('Warning'),
+            '\
+            <p class="text-danger font-weight-bold">\
+                ' + __('You are about to remove the log file "{0}".', [name]) + '\
+            </p>\
+            <p class="text-danger">\
+                ' + __('This action will remove the file completely from the system so it can\'t be undone.') + '\
+            </p>\
+            <p class="text-danger">\
+                ' + __('Make sure that the file is exactly the one you wish to remove before proceeding.') + '\
+            </p>\
+            ',
+            function() {
+                frappe.gc().request(
+                    'remove_log_file',
+                    {filename: name},
+                    function(ret) {
+                        if (ret) $tr.remove();
+                        else this.error_(__('Unable to remove log file "{0}".', [name]));
+                    },
+                    function(e) {
+                        this._error('Failed to remove log file.', name, e.message);
+                        this.error_(__('Failed to remove log file "{0}".', [name]));
+                    }
+                );
+            },
+            __('Continue')
         );
     },
 };

@@ -42,20 +42,23 @@ def get_logger(logType):
 
 
 # [G Settings Form]
-@frappe.whitelist(methods=["GET"])
+@frappe.whitelist()
 def get_log_files():
     import glob
     
-    ret = []
-    exp = "{}-*.log*".format(__abbr__)
-    path = os.path.join("..", "logs")
-    if not path.endswith("/"):
-        path = path + "/"
-    for files in glob.glob(path + exp):
-        for f in files:
-            ret.append(f.strip("/").split("/")[-1])
-    
-    return ret
+    try:
+        ret = []
+        exp = "{}-*.log*".format(__abbr__)
+        path = os.path.join("..", "logs")
+        if not path.endswith("/"):
+            path = path + "/"
+        for files in glob.glob(path + exp):
+            for f in files:
+                ret.append(f.strip("/").split("/")[-1])
+        
+        return ret
+    except Exception:
+        return 0
 
 
 # [G Settings Form]
@@ -68,14 +71,17 @@ def load_log_file(filename):
     ):
         return 0
     
-    path = os.path.join("..", "logs", filename)
-    if not os.path.exists(path):
-        return ""
-    
-    with open(path, "r") as file:
-        data = file.read()
-    
-    return data
+    try:
+        path = os.path.join("..", "logs", filename)
+        if not os.path.exists(path):
+            return 0
+        
+        with open(path, "r") as file:
+            data = file.read()
+        
+        return data
+    except Exception:
+        return 0
 
 
 # [G Settings Form]
@@ -88,12 +94,15 @@ def remove_log_file(filename):
     ):
         return 0
     
-    path = os.path.join("..", "logs", filename)
-    if not os.path.exists(path):
+    try:
+        path = os.path.join("..", "logs", filename)
+        if not os.path.exists(path):
+            return 0
+        
+        os.remove(path)
+        return 1
+    except Exception:
         return 0
-    
-    os.remove(path)
-    return 1
 
 
 # [Internal]
