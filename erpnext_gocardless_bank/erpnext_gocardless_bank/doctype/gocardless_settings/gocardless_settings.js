@@ -196,9 +196,9 @@ frappe._gc_logs = {
                 else frappe.gc()._error('Log filename from attr is invalid.', name);
             }, this),
             remove: frappe.gc().$fn(function(e) {
-                var $tr = $(e.target);
+                let $tr = $(e.target);
                 if (!$tr.is('tr')) $tr = $tr.parents('tr');
-                var name = $tr.attr('data-file-name');
+                let name = $tr.attr('data-file-name');
                 if (frappe.gc().$isStrVal(name)) this._remove(name, $tr);
                 else frappe.gc()._error('Log filename from attr is invalid.', name);
             }, this),
@@ -387,8 +387,6 @@ frappe._gc_logs = {
     ' + __('Log file is empty, does not exist or failed to be loaded.') + '\
 </div>\
         ');
-            
-        );
     },
     _remove: function(name, $tr) {
         frappe.warn(
