@@ -16,10 +16,10 @@ frappe.ui.form.on('Gocardless Settings', {
                     frappe._gc_logs.setup(frm);
                 }
             })
-            .on('page_change page_pop', function() {
+            /*.on('page_change page_pop', function() {
                 frm && frm.events.destroy_table(frm);
                 frm && delete frm._set;
-            })
+            })*/
             .on('on_alert', function(d, t) {
                 frm._set.errs.includes(t) && (d.title = __(frm.doctype));
             });

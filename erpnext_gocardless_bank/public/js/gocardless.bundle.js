@@ -366,7 +366,10 @@
             if (f.length) o._router.val = v;
             return f.length > 0;
         },
-        _reg(o, a) { (a = o._router.obj && o._router.obj[a]) && a('change', o._win.e.change); },
+        _reg(o, a) {
+            if (!o._router.obj || !o._router.obj[a]) return;
+            o._router.obj[a]('change', o._win.e.change);
+        },
     },
     LUF = {
         has_flow(f) { try { return f && !f.is_new() && f.states && f.states.get_state(); } catch(_) {} },
