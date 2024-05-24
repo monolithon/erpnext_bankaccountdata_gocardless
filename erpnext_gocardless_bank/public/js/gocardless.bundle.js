@@ -259,7 +259,7 @@
                     (f = this.$fn(f)) ? f({message: r}) : this._error(r);
                 })
             };
-            if (!this.$isBaseObj(a)) a = {});
+            if (!this.$isBaseObj(a)) a = {};
             this.call('on_request', a);
             !this.$isEmptyObj(a) && this.$assign(d, {type: 'POST', args: a});
             try { frappe.call(d); } catch(e) {
@@ -878,19 +878,18 @@
             for (let x = 0; x < this._n; x++) { this._c[x] = []; }
         }
         get length() { return this._c[0].length; }
-        col(i) { return this._c[i || 0]; }
+        col(i) { return this._c[i && i < this._n ? i : 0]; }
         idx(v, i) { return this.col(i).indexOf(v); }
-        has(v, i) { return (v = this.idx(v, i)) >= 0 && this.col(i)[v] != null; }
+        has(v, i) { return this.col(i).includes(v); }
         add() {
-            let a = arguments, i = this.idx(a[0]);
-            if (i < 0) for (let x = 0; x < this._n; x++) { this._c[x].push(a[x]); }
-            else for (let x = 1; x < this._n; x++)
-                (a[x] != null || this._c[x][i] == null) && (this._c[x][i] = a[x]);
+            let a = arguments, i = this.idx(a[0]), l = a.length;
+            if (i < 0) for (let x = 0; x < this._n; x++) { this._c[x].push(x < l ? a[x] : null); }
+            else for (let x = 1; x < this._n; x++) { if (x < l) this._c[x][i] = a[x]); }
             return this;
         }
         del(v, i) {
-            if ((i = this.idx(v, i)) >= 0)
-                for (let x = 0; x < this._n; x++) { this._c[x].splice(i, 1); }
+            i = this.idx(v, i);
+            if (i >= 0) for (let x = 0; x < this._n; x++) { this._c[x].splice(i, 1); }
             return this;
         }
         row(v, i) {
@@ -900,7 +899,7 @@
             return r;
         }
         clear() {
-            for (let x = 0; x < this._n; x++) { this._c[x] = []; }
+            if (this.length) for (let x = 0; x < this._n; x++) { this._c[x] = []; }
             return this;
         }
     }
