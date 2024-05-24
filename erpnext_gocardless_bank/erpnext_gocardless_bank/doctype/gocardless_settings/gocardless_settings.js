@@ -16,7 +16,7 @@ frappe.ui.form.on('Gocardless Settings', {
                     frappe._gc_logs.setup(frm);
                 }
             })
-            /*.on('page_change page_pop', function() {
+            /*.on('page_clean', function() {
                 frm && frm.events.destroy_table(frm);
                 frm && delete frm._set;
             })*/

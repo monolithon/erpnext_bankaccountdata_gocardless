@@ -185,7 +185,7 @@
             this._events = {
                 list: {},
                 real: {},
-                once: 'ready page_change page_pop page_clean destroy after_destroy'.split(' ')
+                once: 'ready page_change page_clean destroy after_destroy'.split(' ')
             };
         }
         get module() { return this._mod; }
@@ -346,7 +346,7 @@
     var LUR = {
         on(o) {
             for (let k = ['router', 'route'], i = 0, l = k.length; i < l; i++)
-                frappe[k[i]] && (o._router.obj = frappe[k[i]]) && (i < 1 || (o._router.old = 1));
+                (o._router.obj = frappe[k[i]]) && (i < 1 || (o._router.old = 1));
             this._reg(o, 'on');
             this.get(o);
         },
@@ -354,7 +354,7 @@
         get(o) {
             let d = ['app'], v;
             if (!o._router.val) o._router.val = d;
-            try { if (o._router.obj) v = !o._router.old ? frappe.get_route() : o._router.obj.parse(); } catch(_) {}
+            try { v = !o._router.old ? frappe.get_route() : (o._router.obj ? o._router.obj.parse() : null); } catch(_) {}
             if (!LU.$isArrVal(v)) v = d;
             else v[0] = v[0].toLowerCase();
             let f;
@@ -366,7 +366,7 @@
             return f.length > 0;
         },
         _reg(o, a) {
-            if (!o._router.obj || !o._router.obj[a]) return;
+            if (!o._router.obj || !LU.$isFunc(o._router.obj[a])) return;
             o._router.obj[a]('change', o._win.e.change);
         },
     },
@@ -569,26 +569,23 @@
             this._win = {
                 e: {
                     unload: this.$fn(this.destroy),
-                    popstate: this.$fn(function() { !this._win.c && this._win.fn.delay(); }),
-                    change: this.$fn(function() { !this._win.c && this._win.fn.call(1); }),
+                    change: this.$fn(function() { !this._win.c && this._win.fn(); }),
                 },
                 c: 0,
-                fn: this.$proxy(function(n) {
+                fn: this.$fn(function() {
                     if (this._win.c || !LUR.get(this)) return;
                     this._win.c++;
-                    this.emit((n ? 'page_change' : 'page_pop') + ' page_clean');
-                    this.$timeout(function() { this._win.c--; }, n ? 2000 : 1200);
-                }, 200),
+                    this.emit('page_change page_clean');
+                    this.$timeout(function() { this._win.c--; }, 2000);
+                }),
             };
             addEventListener('beforeunload', this._win.e.unload);
-            addEventListener('popstate', this._win.e.popstate);
             LUR.on(this);
         }
         options(opts) { return this.$static(opts); }
         destroy() {
             this._win.fn.cancel();
             LUR.off(this);
-            removeEventListener('popstate', this._win.e.popstate);
             removeEventListener('beforeunload', this._win.e.unload);
             this.emit('page_clean destroy after_destroy').off(1);
             super.destroy();
