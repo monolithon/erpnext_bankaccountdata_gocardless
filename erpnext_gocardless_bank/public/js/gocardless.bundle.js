@@ -884,7 +884,7 @@
         add() {
             let a = arguments, i = this.idx(a[0]), l = a.length;
             if (i < 0) for (let x = 0; x < this._n; x++) { this._c[x].push(x < l ? a[x] : null); }
-            else for (let x = 1; x < this._n; x++) { if (x < l) this._c[x][i] = a[x]); }
+            else for (let x = 1; x < this._n; x++) { if (x < l) this._c[x][i] = a[x]; }
             return this;
         }
         del(v, i) {
