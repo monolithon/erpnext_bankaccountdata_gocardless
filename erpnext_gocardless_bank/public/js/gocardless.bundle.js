@@ -972,10 +972,10 @@
                     this._bank_link[key] = ret;
                     this._bank_link[key].ref_id = ref_id;
                     this.$isFunc(success) && success(
-                        res.link,
+                        ret.link,
                         ref_id,
-                        res.id,
-                        res.access_valid_for_days
+                        ret.id,
+                        ret.access_valid_for_days
                     );
                 },
                 function(e) {
