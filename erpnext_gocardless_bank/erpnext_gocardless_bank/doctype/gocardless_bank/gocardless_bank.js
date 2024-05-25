@@ -122,7 +122,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 function(ret) {
                     if (
                         !this.$isDataObj(ret) || (
-                            (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.doc.name))
+                            (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.docname))
                             && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
                         )
                     ) return this._error('Accounts: invalid bank accounts reloading data received', ret);
@@ -160,12 +160,12 @@ frappe.ui.form.on('Gocardless Bank', {
         frappe.gc().request(
             'save_bank_link',
             {
-                name: cstr(frm.doc.name),
+                name: cstr(frm.docname),
                 auth_id: auth.id,
                 auth_expiry: auth.expiry,
             },
             function(ret) {
-                if (!res) return this.error(__('Unable to link bank account to {0}.', [frm.doc.bank]));
+                if (!ret) return this.error(__('Unable to link bank account to {0}.', [frm.doc.bank]));
                 this.success_(__('{0} is linked successfully', [frm.doc.bank]));
                 this._log('Bank account is linked.');
                 frappe.gc_accounts.mark();
@@ -189,7 +189,7 @@ frappe.ui.form.on('Gocardless Bank', {
                     !this.$isDataObj(ret) || !this.$isStrVal(ret.error)
                     || (
                         ret.any == null
-                        && (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.doc.name))
+                        && (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.docname))
                         && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
                     )
                 ) this._error('Invalid error data received', ret);
@@ -280,7 +280,7 @@ frappe.ui.form.on('Gocardless Bank', {
             var company = cstr(frm.doc.company),
             bank_id = cstr(frm.doc.bank_id),
             transaction_days = cint(frm.doc.transaction_days),
-            docname = cstr(frm.doc.name);
+            docname = cstr(frm.docname);
             frappe.gc().connect_to_bank(
                 company, bank_id, transaction_days, docname,
                 function(link, ref_id, auth_id, auth_expiry) {
@@ -639,7 +639,7 @@ frappe.gc_accounts = {
         var me = this,
         $spinner = this._create_spinner($el);
         let args = {
-            bank: cstr(this._frm.doc.name),
+            bank: cstr(this._frm.docname),
             account: account,
         };
         if (from_dt) args.from_dt = from_dt;
@@ -720,7 +720,7 @@ frappe.gc_accounts = {
                 $loading: this._dialog.modal_body.find('.gc-accounts-loading').first(),
                 $cont: this._dialog.modal_body.find('.gc-accounts-container').first(),
                 $table: this._dialog.modal_body.find('table.gc-accounts-table').first(),
-                $body = this._dialog.modal_body.find('tbody').first(),
+                $body: this._dialog.modal_body.find('tbody').first(),
                 tpl: {
                     def: '\
 <tr>\
@@ -747,7 +747,7 @@ frappe.gc_accounts = {
                         this._dialog.gc.$spinner
                     );
                     this._dialog.gc.$spinner = null;
-                },
+                }, this),
                 list_bank_accounts: frappe.gc().$fn(function() {
                     if (frappe.gc().$isArrVal(this._accounts)) {
                         if (!this._linked) {
@@ -779,7 +779,7 @@ frappe.gc_accounts = {
                     frappe.gc().request(
                         'store_bank_account',
                         {
-                            name: cstr(this._frm.doc.name),
+                            name: cstr(this._frm.docname),
                             account: this._dialog.gc.account
                         },
                         function(res) {
@@ -790,13 +790,13 @@ frappe.gc_accounts = {
                             }
                             me._dialog.gc.hide_spinner();
                             frappe.gc()._log('Accounts: storing bank account success');
-                            frappe.gc().success_(__('The Gocardless bank account "{0}" has been added successfully', [this._dialog.gc.account]);
+                            frappe.gc().success_(__('The Gocardless bank account "{0}" has been added successfully', [this._dialog.gc.account]));
                             me._frm.reload_doc();
                         },
                         function() {
                             me._dialog.gc.hide_spinner();
                             frappe.gc()._error('Accounts: storing bank account error');
-                            frappe.gc().error(__('Unable to add the Gocardless bank account "{0}" for the bank "{1}".', [account, frm.doc.name]));
+                            frappe.gc().error(__('Unable to add the Gocardless bank account "{0}" for the bank "{1}".', [account, cstr(me._frm.docname)]));
                         }
                     );
                 }, this),
@@ -812,7 +812,7 @@ frappe.gc_accounts = {
                     frappe.gc().request(
                         'change_bank_account',
                         {
-                            name: cstr(this._frm.doc.name),
+                            name: cstr(this._frm.docname),
                             account: this._dialog.gc.account,
                             bank_account: acc_name,
                         },

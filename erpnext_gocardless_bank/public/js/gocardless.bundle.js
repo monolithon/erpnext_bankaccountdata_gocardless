@@ -422,7 +422,7 @@
             }
         },
         toggle_field(f, k, g, r, c, e, i) {
-            k && (f = this.get_field(f, k, g, r, c));
+            k && (f = this.get_field(f, k, g, r, c, 1));
             e = e ? 0 : 1;
             if ((k && (!f || !f.df)) || cint(f.df.hidden) || (i && f.df._ignore) || cint(f.df.read_only) === e) return;
             this.field_prop(f, k, g, r, c, 'read_only', e, 1);
@@ -434,7 +434,7 @@
         },
         field_desc(f, k, g, r, c, m, t) {
             let x = 0;
-            !t && (f = this.get_field(f, k, g, r, c));
+            !t && (f = this.get_field(f, k, g, r, c, 1));
             f.df._description = f.df._description || this.get_field_desc(f, k, g, r, c, 0, 1);
             !LU.$isStrVal(m) && (m = '');
             try {
@@ -448,7 +448,7 @@
             return x;
         },
         field_status(f, k, g, r, c, m) {
-            let v = LU.$isStrVal(m), tf = this.get_field(f, k, g, r, c), x = 0;
+            let v = LU.$isStrVal(m), tf = this.get_field(f, k, g, r, c, 1), x = 0;
             if ((!v && tf.df.invalid) || (v && !tf.df.invalid))
                 try {
                     ++x && ((tf.df.invalid = v ? 1 : 0) || 1) && tf.set_invalid && tf.set_invalid();
@@ -717,7 +717,6 @@
         get_tfield(f, k, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, null, c); }
         get_row(f, k, r) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r); }
         get_rfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c); }
-        get_r(f, k, r) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, 0, 1); }
         get_rmfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c, 1); }
         reload_field(f, k) {
             (f = this.get_form(f)) && LUF.reload_field(f, k);

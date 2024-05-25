@@ -35,7 +35,7 @@ frappe.listview_settings['Gocardless Bank'] = {
                         auth_expiry: auth.expiry,
                     },
                     function(ret) {
-                        if (!res) return this.error(__('Unable to link bank account to {0}.', [auth.bank]));
+                        if (!ret) return this.error(__('Unable to link bank account to {0}.', [auth.bank]));
                         this.success_(__('{0} is linked successfully', [auth.bank]));
                         list.refresh();
                     },
