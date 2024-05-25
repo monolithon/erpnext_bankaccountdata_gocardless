@@ -65,7 +65,7 @@ class GocardlessBank(Document):
     
     def _set_defaults(self):
         if self.company:
-            from erpnext_gocardless_bank import get_company_country
+            from erpnext_gocardless_bank.libs import get_company_country
             
             country = get_company_country(self.company)
             if not country and self.country:

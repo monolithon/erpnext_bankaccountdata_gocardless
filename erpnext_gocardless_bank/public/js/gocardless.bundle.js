@@ -202,11 +202,15 @@
         warn(t, m) { return this.$alert(t, m, 'orange', 'warn'); }
         error(t, m) { return this.$alert(t, m, 'red', 'error'); }
         fatal(t, m) { return this.$alert(t, m, 'red', 'fatal'); }
-        $toast(m, i) { frappe.show_alert({message: m, indicator: i}); return this; }
-        success_(m) { return this.$toast(m, 'green'); }
-        info_(m) { return this.$toast(m, 'blue'); }
-        warn_(m) { return this.$toast(m, 'orange'); }
-        error_(m) { return this.$toast(m, 'red'); }
+        $toast(m, i, s, a) {
+            this.$isBaseObj(s) && (a = s) && (s = 0);
+            frappe.show_alert(this.$assign({indicator: i}, this.$isBaseObj(m) ? m : {message: m}), s || 4, a);
+            return this;
+        }
+        success_(m, s, a) { return this.$toast(m, 'green', s, a); }
+        info_(m, s, a) { return this.$toast(m, 'blue', s, a); }
+        warn_(m, s, a) { return this.$toast(m, 'orange', s, a); }
+        error_(m, s, a) { return this.$toast(m, 'red', s, a); }
         $console(fn, a) {
             if (this._prod) return this;
             !this.$isStr(a[0]) ? Array.prototype.unshift.call(a, this._pfx)
