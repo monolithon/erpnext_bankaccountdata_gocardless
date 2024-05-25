@@ -239,6 +239,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 this.is_debug && ret.unshift({
                     id: 'SANDBOXFINANCE_SFIN0000',
                     name: 'Testing Sandbox Finance',
+                    logo: 'https://altcoinsbox.com/wp-content/uploads/2023/03/the-sandbox-logo.jpg',
                 });
                 
                 let data = [],
