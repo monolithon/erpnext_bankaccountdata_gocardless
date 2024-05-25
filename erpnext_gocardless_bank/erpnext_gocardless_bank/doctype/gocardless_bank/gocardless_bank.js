@@ -243,7 +243,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 
                 let data = [],
                 cache = [],
-                img = '<img src="{url}" alt="{name}" style="width:20px;height:20px;border-radius:50%"/> ';
+                img = '<img src="{url}" alt="{name}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%"/> ';
                 for (let i = 0, l = ret.length, v, p; i < l; i++) {
                     v = ret[i];
                     p = this.$isStrVal(v.logo) ? img.replace('{url}', v.logo).replace('{name}', v.name) : '';
