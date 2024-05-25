@@ -26,17 +26,17 @@ def update_access(row, client):
 # [Internal]
 def access_connect(row, client, now):
     client.connect(row.secret_id, row.secret_key)
-    return update_access(row, client, now, True)
+    return update_access_data(row, client, now, True)
 
 
 # [Internal]
 def access_refresh(row, client, now):
     client.refresh(row.refresh_token)
-    return update_access(row, client, now)
+    return update_access_data(row, client, now)
 
 
 # [Internal]
-def update_access(row, client, now, _all=False):
+def update_access_data(row, client, now, _all=False):
     data = client.get_token()
     if not data or not isinstance(data, dict):
         return -1
