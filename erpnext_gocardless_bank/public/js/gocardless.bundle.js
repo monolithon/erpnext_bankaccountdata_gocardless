@@ -435,7 +435,7 @@
         field_desc(f, k, g, r, c, m) {
             let x = 0;
             k && (f = this.get_field(f, k, g, r, c, 1));
-            if (f.df._description =+ null) f.df._description = f.df.description || '';
+            if (f.df._description == null) f.df._description = f.df.description || '';
             if (!LU.$isStr(m)) m = '';
             try {
                 if (m.length && f.set_new_description) ++x && f.set_new_description(m);
