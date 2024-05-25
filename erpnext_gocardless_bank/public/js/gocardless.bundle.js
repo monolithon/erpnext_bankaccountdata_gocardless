@@ -428,19 +428,19 @@
             this.field_prop(f, k, g, r, c, 'read_only', e);
             this._toggle_translatable(tf, e ? 1 : 0);
         },
-        get_field_desc(f, k, g, r, c, b, t) {
-            !t && (f = this.get_field(f, k, g, r, c, 1));
-            return cstr(f && f.df && ((b && f.df._description) || (!b && f.df.description) || ''));
+        get_field_desc(f, k, g, r, c, b) {
+            k && (f = this.get_field(f, k, g, r, c, 1));
+            return cstr((f && f.df && ((b && f.df._description) || (!b && f.df.description))) || '');
         },
-        field_desc(f, k, g, r, c, m, t) {
+        field_desc(f, k, g, r, c, m) {
             let x = 0;
-            !t && (f = this.get_field(f, k, g, r, c, 1));
-            f.df._description = f.df._description || this.get_field_desc(f, k, g, r, c, 0, 1);
-            !LU.$isStrVal(m) && (m = '');
+            k && (f = this.get_field(f, k, g, r, c, 1));
+            if (f.df._description =+ null) f.df._description = f.df.description || '';
+            if (!LU.$isStr(m)) m = '';
             try {
                 if (m.length && f.set_new_description) ++x && f.set_new_description(m);
                 else if (f.set_description) {
-                    !m.length && ((m = f.df._description || '') || delete f.df._description);
+                    if (!m.length) { m = f.df._description || ''; delete f.df._description; }
                     ++x && f.set_description(m);
                 }
                 f.toggle_description && f.toggle_description(m.length > 0);
@@ -453,7 +453,7 @@
                 try {
                     ++x && ((tf.df.invalid = v ? 1 : 0) || 1) && tf.set_invalid && tf.set_invalid();
                 } catch(_) {}
-            this.field_desc(tf, k, g, r, c, m, 1) && x++;
+            this.field_desc(tf, 0, 0, null, 0, m) && x++;
             x && this.reload_field(f, k, r, c);
         },
         _toggle_translatable(f, s) {
