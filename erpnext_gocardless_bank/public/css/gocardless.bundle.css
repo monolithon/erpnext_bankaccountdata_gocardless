@@ -36,10 +36,25 @@ html[dir="rtl"] .gc-table td[scope="row"] {
 }
 html[dir="rtl"] .gc-action > .spinner-border {
     margin-left: 0.5rem;
+    margin-right: 0;
 }
 .gc-link {
     margin-right: 0.5rem;
 }
 html[dir="rtl"] .gc-link {
     margin-left: 0.5rem;
+    margin-right: 0;
+}
+.gc-me-1 {
+    margin-right: 0.25rem;
+}
+html[dir="rtl"] .gc-me-1 {
+    margin-left: 0.25rem;
+    margin-right: 0;
+}
+.gc-bank-logo {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #6c757d;
+    border-radius: 50%;
 }

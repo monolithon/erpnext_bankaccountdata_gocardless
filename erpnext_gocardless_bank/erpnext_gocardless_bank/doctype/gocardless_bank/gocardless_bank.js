@@ -21,7 +21,13 @@ frappe.ui.form.on('Gocardless Bank', {
             is_auth: 0,
             inits: {},
             companies: {},
-            list: {key: '', data: {}, cache: {}},
+            list: {
+                key: '',
+                data: {},
+                cache: {},
+                idx: {},
+                time: 2 * 24 * 60 * 60
+            },
         };
         frm.set_query('company', function(doc) {
             return {query: frappe.gc().get_method('search_companies')};
@@ -212,11 +218,19 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     load_banks: function(frm) {
         if (frm._bank.is_set) return;
-        var country = cstr(frm.doc.country);
+        let country = cstr(frm.doc.country);
         if (!country.length || frm._bank.list.key === country) return;
-        if (frm._bank.list.data[country]) {
-            frm._bank.list.key = country;
-            return frm.get_field('bank').set_data(frm._bank.list.data[country]);
+        let data = frm._bank.list.data[country];
+        if (data) return frappe.gc_banks.update(frm, country, data, 1);
+        if (!frm._bank.inits.banks_css) {
+            frm._bank.inits.banks_css = 1;
+            frappe.gc_accounts.load_css();
+        }
+        !frm._bank.inits.banks_field && frappe.gc_banks.field(frm);
+        data = frappe.gc_banks.load(country);
+        if (data) {
+            frappe.gc_banks.get_cache(frm, country, data);
+            return frappe.gc_banks.update(frm, country, data);
         }
         frappe.gc().request(
             'get_banks',
@@ -242,21 +256,9 @@ frappe.ui.form.on('Gocardless Bank', {
                     logo: 'https://altcoinsbox.com/wp-content/uploads/2023/03/the-sandbox-logo.jpg',
                 });
                 
-                let data = [],
-                cache = [],
-                img = '<img src="{url}" alt="{name}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%"/> ';
-                for (let i = 0, l = ret.length, v, p; i < l; i++) {
-                    v = ret[i];
-                    p = this.$isStrVal(v.logo) ? img.replace('{url}', v.logo).replace('{name}', v.name) : '';
-                    cache.push(this.$clone(v));
-                    data.push({label: p + __(v.name), value: v.name});
-                }
-                frm._bank.list.key = country;
-                frm._bank.list.data[country] = data;
-                frm._bank.list.cache[country] = cache;
-                let field = frm.get_field('bank');
-                field.set_data(data);
-                field.translate_values = false;
+                let country = cstr(frm.doc.country);
+                frappe.gc_banks.store(frm, country, ret);
+                frappe.gc_banks.update(frm, country, ret);
             },
             function(e) {
                 this._error('Failed to get banks list.', country, e.message);
@@ -313,6 +315,56 @@ frappe.ui.form.on('Gocardless Bank', {
         frappe.gc_accounts.check();
     },
 });
+
+
+frappe.gc_banks = {
+    load: function(country) {
+        return frappe.gc().cache().get('banks_list_' + country);
+    },
+    store: function(frm, country, data) {
+        frm._bank.list.cache[country] = data;
+        frappe.gc().cache().set('banks_list_' + country, data, frm._bank.list.time);
+    },
+    field: function(frm) {
+        let field = frm.get_field('bank');
+        if (!field || !field.awesomplete || !frappe.gc().$isFunc(field.awesomplete.item)) return;
+        frm._bank.inits.banks_field = 1;
+        field.awesomplete.item = function(item) {
+            let d = this.get_item(item.value);
+            if (!d) d = item;
+            if (!d.label) d.label = d.value;
+            let idx = frm._bank.list.idx[frm._bank.list.key][d.value],
+            html = '<strong>' + d.label + '</strong>';
+            if (frappe.gc().$isNum(idx) && idx >= 0) {
+                idx = frm._bank.list.cache[frm._bank.list.key][idx];
+                if (idx && idx.logo) html = '<img src="{url}" alt="{name}" class="gc-bank-logo gc-me-1"/>'
+                .replace('{name}', idx.name).replace('{url}', frappe.gc().image().load(
+                    idx.logo, 18, 18, frm._bank.list.time
+                )) + html;
+            }
+            if (d.description) html += '<br><span class="small">' + __(d.description) + '</span>';
+            return $('<li></li>')
+                .data('item.autocomplete', d)
+                .prop('aria-selected', 'false')
+                .html('<a><p>' + html + '</p></a>')
+                .get(0);
+        };
+    },
+    update: function(frm, country, data, ready) {
+        if (!ready) {
+            frm._bank.list.idx[country] = {};
+            data = frappe.gc().$map(data, function(v, i) {
+                if (this.$isStrVal(v.logo)) frm._bank.list.idx[country][v.name] = i;
+                return {value: v.name, label: __(v.name)};
+            });
+            frm._bank.list.data[country] = data;
+        }
+        frm._bank.list.key = country;
+        let field = frm.get_field('bank');
+        field.set_data(data);
+        field.translate_values = false;
+    },
+};
 
 
 frappe.gc_accounts = {
@@ -421,6 +473,13 @@ frappe.gc_accounts = {
         }
         this._switch('table');
     },
+    load_css() {
+        if (!frappe.gc().$hasElem('gocardless'))
+            frappe.gc().$loadCss(
+                '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
+                {id: 'gocardless'}
+            );
+    },
     _switch(key) {
         let k = '_$' + key;
         if (!this[k] || this._view === key) return;
@@ -430,12 +489,7 @@ frappe.gc_accounts = {
         this._view = key;
     },
     _build() {
-        if (!frappe.gc().$hasElem('gocardless'))
-            frappe.gc().$loadCss(
-                '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
-                {id: 'gocardless'}
-            );
-        
+        this.load_css();
         this._$wrapper = $('<div class="table-responsive mb-4 mx-md-2 mx-1"></div>').appendTo(this._field.$wrapper);
         this._$table = $('\
 <table class="table table-bordered table-hover gc-table">\

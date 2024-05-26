@@ -142,7 +142,7 @@
         $hasElem(id) { return !!document.getElementById(id); },
         $makeElem(tag, opt) {
             let $el = document.createElement(tag);
-            if (opt) for (let k in opt) { $el[k] = opt[k]; }
+            if (opt) for (let k in opt) { if (this.$hasProp(k, opt)) $el[k] = opt[k]; }
             return $el;
         },
         $loadJs(src, opt) {
@@ -356,17 +356,19 @@
         off(o) { this._reg(o, 'off') && (o._router.obj = o._router.old = null); },
         get(o) {
             let d = ['app'], v;
-            if (!o._router.val) o._router.val = d;
             try { v = !o._router.old ? frappe.get_route() : (o._router.obj ? o._router.obj.parse() : null); } catch(_) {}
             if (!LU.$isArrVal(v)) v = d;
-            else v[0] = v[0].toLowerCase();
-            let f;
-            if (o._router.val.length !== v.length) f = d;
-            else f = LU.$filter(v, function(z, i) {
-                return o._router.val.indexOf(z) !== i;
-            });
-            if (f.length) o._router.val = v;
-            return f.length > 0;
+            else {
+                v = LU.$map(v, function(z) { return cstr(z); });
+                v = LU.$filter(v, function(z, i) { return z.length && z !== '#'; });
+                if (v.length) v[0] = cstr(v[0]).toLowerCase();
+            }
+            let r = 0;
+            for (let i = 0, l = v.length; i < l; i++) {
+                if ((!o._router.val || o._router.val.indexOf(v[i]) !== i) && ++r) break;
+            }
+            if (r) o._router.val = v;
+            return r > 0;
         },
         _reg(o, a) {
             if (!o._router.obj || !LU.$isFunc(o._router.obj[a])) return;
@@ -577,7 +579,7 @@
         constructor(mod, key, doc, ns, prod) {
             super(mod, key, doc, ns, prod);
             this.$xdef({is_enabled: true});
-            this._router = {obj: null, old: 0, val: ['app']};
+            this._router = {obj: null, old: 0, val: null};
             this._win = {
                 e: {
                     unload: this.$fn(this.destroy),
@@ -836,46 +838,48 @@
     }
     
     
-    class LevelUpCache extends LevelUpCore {
+    class LevelUpCache {
         constructor(pfx) {
-            super();
-            this._pfx = this.$isStrVal(pfx) ? pfx : 'lu_';
+            this._s = localStorage;
+            this._p = LU.$isStrVal(pfx) ? pfx : 'lu_';
         }
         has(k) { return this._get(k) != null; }
         get(k) { return (k = this._get(k)) && k.___ != null ? k.___ : k; }
         pop(k) {
             let v = this.get(k);
-            v != null && this.del(k);
+            if (v != null) this.del(k);
             return v;
         }
         set(k, v, t) {
-            if (!this.$isStrVal(k)) return this;
+            if (!LU.$isStrVal(k)) return this;
             v = {___: v};
-            if (this.$isNum(t) && t > 0)
-                v.e = (new Date()).getTime() + (t * 1000);
-            try { localStorage.setItem(this._pfx + k, this.$toJson(v)); } catch(_) {}
+            if (cint(t) > 0) v.e = (new Date()).getTime() + (cint(t) * 1000);
+            try { this._s.setItem(this._p + k, LU.$toJson(v)); } catch(_) {}
             return this;
         }
         del(k) {
-            if (this.$isStrVal(k))
-                try { localStorage.removeItem(this._pfx + k); } catch(_) {}
+            if (LU.$isStrVal(k)) try { this._s.removeItem(this._p + k); } catch(_) {}
+            return this;
+        }
+        clear() {
+            let l = 0;
+            try { l = this._s.length; } catch(_) { return this; }
+            for (let i = 0, k; i < l; i++)
+                try {
+                    LU.$isStrVal((k = this._s.key(i))) && k.startsWith(this._p) && this._s.removeItem(k);
+                } catch(_) {}
             return this;
         }
         _get(k) {
-            if (!this.$isStrVal(k)) return;
+            if (!LU.$isStrVal(k)) return;
             let v;
-            try { v = sessionStorage.getItem(this._pfx + k); } catch(_) { return; }
-            if (v == null) return;
-            v = this.$parseJson(v);
-            if (v == null) return;
-            if (v.___ != null) {
-                if (v.e != null && v.e < (new Date()).getTime()) {
-                    this.del(k);
-                    return;
-                }
-                v = v.___;
+            try { v = this._s.getItem((k = this._p + k)); } catch(_) { return; }
+            if (v == null || (v = LU.$parseJson(v)) == null || v.___ == null) return v;
+            if (v.e != null && v.e < (new Date()).getTime()) {
+                try { this._s.removeItem(k); } catch(_) {}
+                return;
             }
-            return v;
+            return v.___;
         }
     }
     LevelUp.prototype.cache = function() { return this._cache || (this._cache = new LevelUpCache(this._real)); };
@@ -918,6 +922,36 @@
         }
     }
     LevelUp.prototype.table = function(cols) { return new LevelUpTable(cols); };
+    
+    
+    class LevelUpImage {
+        constructor(pfx) {
+            this._c = new LevelUpCache(pfx + 'img_');
+        }
+        load(u, w, h, t) {
+            if (!LU.$isStrVal(u)) return u;
+            w = LU.$isNum(w) ? w : 0;
+            h = LU.$isNum(h) ? h : 0;
+            let k = u + (w > 0 ? '_w' + w : '') + (h > 0 ? '_h' + h : ''),
+            v = this._c.get(k);
+            if (LU.$isStrVal(v)) return v;
+            let i = new Image();
+            i.src = u;
+            i.crossOrigin = 'Anonymous';
+            i.onload = LU.$afn(function(me, k) {
+                let c = LU.$makeElem('canvas'),
+                x = c.getContext('2d');
+                c.width = w > 0 ? w : this.width;
+                c.height = h > 0 ? h : this.height;
+                x.drawImage(this, 0, 0);
+                let e = u.split('.').pop().toLowerCase();
+                e = 'image/' + (e === 'jpg' ? 'jpeg' : e);
+                me._c.set(k, c.toDataURL(e), t);
+            }, [this, k], i);
+            return u;
+        }
+    }
+    LevelUp.prototype.image = function() { return this._image || (this._image = new LevelUpImage(this._real)); };
     
     
     class Gocardless extends LevelUp {
