@@ -16,7 +16,6 @@ frappe.ui.form.on('Gocardless Bank', {
             });
         frm._bank = {
             errs: ['fatal', 'error'],
-            is_new: !!frm.is_new(),
             is_set: 0,
             is_auth: 0,
             inits: {},
@@ -99,30 +98,28 @@ frappe.ui.form.on('Gocardless Bank', {
         if (cint(frm.doc.transaction_days) < 1) frm.set_value('transaction_days', 180);
     },
     after_save: function(frm) {
-        frm._bank.is_new = false;
         frm.events.check_status(frm, 1);
     },
     check_status: function(frm, save) {
-        if (frm._bank.is_new) return;
+        if (frm.is_new()) return;
         if (
             !frm._bank.is_set
             && frappe.gc().$isStrVal(frm.doc.bank)
             && frappe.gc().$isStrVal(frm.doc.bank_id)
         ) {
+            frm._bank.is_set++;
             if (!save) {
                 let key = 'bank',
                 val = cstr(frm.doc[key]);
                 frm.get_field(key).set_data([{label: __(val), value: val}]);
             }
-            frm._bank.is_set++;
-            save && frm._bank.inits.bar && frm.events.setup_toolbar(frm, 1);
         }
         if (
             !frm._bank.is_auth
-            && frm._bank.is_set
             && frappe.gc().$isStrVal(frm.doc.auth_id)
         ) {
             frm._bank.is_auth++;
+            frm._bank.inits.bar && frm.events.setup_toolbar(frm, 1);
             frappe.gc().real(
                 'reload_bank_accounts',
                 function(ret) {
@@ -144,7 +141,7 @@ frappe.ui.form.on('Gocardless Bank', {
     check_link: function(frm) {
         if (
             frm.is_new()
-            || frappe.gc().$isStrVal(frm.doc.auth_id)
+            || !frm._bank.is_auth
             || cstr(frm.doc.auth_status) !== 'Unlinked'
             || !frappe.has_route_options()
             || !frappe.gc().$isStrVal(frappe.route_options.ref)
@@ -207,15 +204,6 @@ frappe.ui.form.on('Gocardless Bank', {
             }
         );
     },
-    setup_sync_note: function(frm) {
-        if (frm._bank.is_new || frm._bank.inits.note || !frm._bank.is_auth) return;
-        frm._bank.inits.note = 1;
-        frm.get_field('sync_html').html(
-            '<p class="text-danger">'
-                + __('For security reasons, transactions sync for each bank account, both auto and manual, are limited to a total of 4 times per day.')
-            + '</p>'
-        );
-    },
     load_banks: function(frm) {
         if (frm._bank.is_set) return;
         let country = cstr(frm.doc.country);
@@ -270,12 +258,10 @@ frappe.ui.form.on('Gocardless Bank', {
         if (frm._bank.inits.bar || frm._bank.is_set) return;
         let label = __('Authorize');
         if (frm.custom_buttons[label]) {
-            if (del) {
-                frm.custom_buttons[label].remove();
-                delete frm.custom_buttons[label];
-                delete frm._bank.inits.bar;
-            }
-            return;
+            if (!del) return;
+            frm.custom_buttons[label].remove();
+            delete frm.custom_buttons[label];
+            delete frm._bank.inits.bar;
         }
         if (del) return;
         frm._bank.inits.bar = 1;
@@ -302,6 +288,15 @@ frappe.ui.form.on('Gocardless Bank', {
             );
         });
         frm.change_custom_button_type(label, null, 'success');
+    },
+    setup_sync_note: function(frm) {
+        if (frm.is_new() || frm._bank.inits.note || !frm._bank.is_auth) return;
+        frm._bank.inits.note = 1;
+        frm.get_field('sync_html').html(
+            '<p class="text-danger">'
+                + __('For security reasons, transactions sync for each bank account, both auto and manual, are limited to a total of 4 times per day.')
+            + '</p>'
+        );
     },
     load_accounts: function(frm) {
         if (!frm._bank.is_auth) return;
