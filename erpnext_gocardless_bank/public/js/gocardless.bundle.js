@@ -939,11 +939,13 @@
             i.src = u;
             i.crossOrigin = 'Anonymous';
             i.onload = LU.$afn(function(me, k) {
-                let c = LU.$makeElem('canvas'),
+                let tw = w > 0 && w < this.width ? w : this.width,
+                th = h > 0 && h < this.height ? h : this.height,
+                c = LU.$makeElem('canvas'),
                 x = c.getContext('2d');
-                c.width = w > 0 ? w : this.width;
-                c.height = h > 0 ? h : this.height;
-                x.drawImage(this, 0, 0);
+                c.width = tw;
+                c.height = th;
+                x.drawImage(this, 0, 0, tw, th);
                 let e = u.split('.').pop().toLowerCase();
                 e = 'image/' + (e === 'jpg' ? 'jpeg' : e);
                 me._c.set(k, c.toDataURL(e), t);
@@ -986,13 +988,18 @@
             .emit('ready');
         }
         connect_to_bank(company, id, transaction_days, docname, success, error) {
-            transaction_days = cint(transaction_days || 0);
-            var key = [company, id, transaction_days];
-            if (docname) key.push(docname);
+            transaction_days = cint(transaction_days);
+            if (!this.$isStrVal(docname)) docname = null;
+            success = this.$fn(success);
+            error = this.$fn(error);
+            
+            var key = [company, id];
+            transaction_days > 0 && key.push(transaction_days);
+            docname && key.push(docname);
             key = key.join('-');
             if (this._bank_link[key]) {
                 let data = this._bank_link[key];
-                this.$isFunc(success) && success(
+                success && success(
                     data.link,
                     data.ref_id,
                     data.id,
@@ -1002,33 +1009,29 @@
             }
             
             var ref_id = '_' + Math.random().toString(36).substr(2);
-            let args = {
-                company,
-                bank_id: id,
-                ref_id: ref_id,
-                transaction_days: transaction_days,
-            };
+            let args = {company: company, bank_id: id, ref_id: ref_id};
+            if (transaction_days > 0) args.transaction_days = transaction_days;
             if (docname) args.docname = docname;
             this.request(
-                'get_bank_link',
-                args,
+                'get_bank_link', args,
                 function(ret) {
                     if (!this.$isDataObj(ret))
-                        return this.error('Bank link received is invalid.');
+                        return this.error(__('Bank link data received is invalid.'));
                     
-                    ret.access_valid_for_days = cint(ret.access_valid_for_days || 180);
+                    ret.access_valid_for_days = cint(ret.access_valid_for_days);
+                    if (ret.access_valid_for_days < 1) ret.access_valid_for_days = 180;
+                    ret.ref_id = ref_id;
                     this._bank_link[key] = ret;
-                    this._bank_link[key].ref_id = ref_id;
-                    this.$isFunc(success) && success(
+                    success && success(
                         ret.link,
-                        ref_id,
+                        ret.ref_id,
                         ret.id,
                         ret.access_valid_for_days
                     );
                 },
                 function(e) {
-                    this.error(e.self ? e.message : __('Unable to get Gocardless bank link data.'));
-                    this.$isFunc(error) && error(e);
+                    if (error) error(e);
+                    else this.error(e.self ? e.message : __('Unable to get Gocardless bank link data.'));
                 }
             );
         }

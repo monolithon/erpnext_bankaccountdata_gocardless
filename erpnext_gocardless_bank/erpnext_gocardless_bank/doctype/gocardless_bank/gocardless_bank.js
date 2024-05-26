@@ -65,15 +65,17 @@ frappe.ui.form.on('Gocardless Bank', {
         let key = 'bank',
         val = cstr(frm.doc[key]);
         if (!val.length) return;
-        let cache = frm._bank.list.cache[frm._bank.list.key];
-        if (!cache) return;
+        let idx = frm._bank.list.idx[frm._bank.list.key];
+        if (!idx) return;
+        idx = idx[val];
         let found = 0;
-        for (let i = 0, l = cache.length; i < l; i++) {
-            if (cache[i].name !== val) continue;
-            frm.set_value('bank_id', cache[i].id);
-            frm.set_value('transaction_days', cint(cache[i].transaction_total_days || 90));
-            found++;
-            break;
+        if (frappe.gc().$isNum(idx) && idx > 0) {
+            idx = frm._bank.list.cache[frm._bank.list.key][idx];
+            if (idx && idx.id) {
+                frm.set_value('bank_id', idx.id);
+                frm.set_value('transaction_days', cint(idx.transaction_total_days || 90));
+                found++;
+            }
         }
         if (!found) frappe.gc().error(__('Selected bank "{0}" is invalid.', [val]));
     },
@@ -210,10 +212,6 @@ frappe.ui.form.on('Gocardless Bank', {
         if (!country.length || frm._bank.list.key === country) return;
         let data = frm._bank.list.data[country];
         if (data) return frappe.gc_banks.update(frm, country, data, 1);
-        if (!frm._bank.inits.banks_css) {
-            frm._bank.inits.banks_css = 1;
-            frappe.gc_accounts.load_css();
-        }
         !frm._bank.inits.banks_field && frappe.gc_banks.field(frm);
         data = frappe.gc_banks.load(country);
         if (data) {
@@ -269,6 +267,7 @@ frappe.ui.form.on('Gocardless Bank', {
             bank_id = cstr(frm.doc.bank_id),
             transaction_days = cint(frm.doc.transaction_days),
             docname = cstr(frm.docname);
+            
             frappe.gc().connect_to_bank(
                 company, bank_id, transaction_days, docname,
                 function(link, ref_id, auth_id, auth_expiry) {
@@ -330,7 +329,7 @@ frappe.gc_banks = {
             html = '<strong>' + d.label + '</strong>';
             if (frappe.gc().$isNum(idx) && idx >= 0) {
                 idx = frm._bank.list.cache[frm._bank.list.key][idx];
-                if (idx && idx.logo) html = '<img src="{url}" alt="{name}" class="gc-bank-logo gc-me-1"/>'
+                if (idx && idx.logo) html = '<img src="{url}" alt="{name}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> '
                 .replace('{name}', idx.name).replace('{url}', frappe.gc().image().load(
                     idx.logo, 18, 18, frm._bank.list.time
                 )) + html;
@@ -466,13 +465,6 @@ frappe.gc_accounts = {
         }
         this._switch('table');
     },
-    load_css() {
-        if (!frappe.gc().$hasElem('gocardless'))
-            frappe.gc().$loadCss(
-                '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
-                {id: 'gocardless'}
-            );
-    },
     _switch(key) {
         let k = '_$' + key;
         if (!this[k] || this._view === key) return;
@@ -482,7 +474,11 @@ frappe.gc_accounts = {
         this._view = key;
     },
     _build() {
-        this.load_css();
+        if (!frappe.gc().$hasElem('gocardless'))
+            frappe.gc().$loadCss(
+                '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
+                {id: 'gocardless'}
+            );
         this._$wrapper = $('<div class="table-responsive mb-4 mx-md-2 mx-1"></div>').appendTo(this._field.$wrapper);
         this._$table = $('\
 <table class="table table-bordered table-hover gc-table">\

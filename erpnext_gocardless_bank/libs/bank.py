@@ -74,7 +74,7 @@ def get_bank_link(company, bank_id, ref_id, transaction_days=0, docname=None):
         not company or not isinstance(company, str) or
         not bank_id or not isinstance(bank_id, str) or
         not ref_id or not isinstance(ref_id, str) or
-        (transaction_days and not isinstance(transaction_days, int)) or
+        not isinstance(transaction_days, int) or
         (docname and not isinstance(docname, str))
     ):
         return {"error": _("Data required to get Gocardless bank link are invalid.")}

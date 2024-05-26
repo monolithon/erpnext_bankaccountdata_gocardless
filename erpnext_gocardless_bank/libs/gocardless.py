@@ -9,7 +9,8 @@ from frappe import _
 from frappe.utils import (
     get_request_session,
     get_request_site_address,
-    cstr
+    cstr,
+    cint
 )
 
 from .api import Api
@@ -126,9 +127,13 @@ class Gocardless:
     
     
     def get_bank_agreement(self, bank_id: str, transaction_days: int|None=None):
+        transaction_days = cint(transaction_days)
+        if transaction_days < 1:
+            transaction_days = 90
+        
         data = self._send(Api.bank_agreement, {
             "institution_id": bank_id,
-            "max_historical_days": transaction_days or 90,
+            "max_historical_days": transaction_days,
             "access_valid_for_days": 180,
             "access_scope": ["balances", "details", "transactions"]
         })
