@@ -36,6 +36,7 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     refresh: function(frm) {
         if (frm.doc.__needs_refresh) return frm.reload_doc();
+        frm.events.check_status(frm);
         frm.events.setup_errors(frm);
         frm.events.setup_sync_note(frm);
         frm.events.load_banks(frm);
