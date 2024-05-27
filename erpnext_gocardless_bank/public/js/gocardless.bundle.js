@@ -481,20 +481,23 @@
                 (d = ds[i]) && cint(d.read_only) && (d._ignore = 1);
         },
         toggle(f, k, e, o, i) {
-            let tf = this._grid(f, k, i), x = !e || tf._;
+            let tf, x;
+            if (!(tf = this._grid(f, k, i))) return;
+            x = !e || !!tf._;
             x && (!o || !o.add) && this.toggle_add(tf, 0, e);
             x && (!o || !o.del) && this.toggle_del(tf, 0, e);
             x && (!o || !o.edit) && this.toggle_edit(tf, 0, o && o.keep, e);
             x && (!o || !o.sort) && this.toggle_sort(tf, 0, e);
             LUC.reload(f, k);
             x && (!o || !o.del) && this.toggle_check(tf, 0, e);
-            e && delete tf._;
+            if (e && tf._) delete tf._;
         },
         toggle_add(f, k, e) {
-            let tf = k ? this._grid(f, k) : f;
+            let tf;
+            if (!(tf = k ? this._grid(f, k) : f)) return;
             if (e) {
                 (!tf._ || tf._.add != null) && (tf.df.cannot_add_rows = tf._ ? tf._.add : false);
-                k && tf._ && delete tf._.add;
+                if (k && tf._) delete tf._.add;
             } else {
                 (tf._ = tf._ || {}) && tf._.add == null && (tf._.add = tf.df.cannot_add_rows);
                 tf.df.cannot_add_rows = true;
@@ -503,10 +506,11 @@
             return 1;
         },
         toggle_del(f, k, e) {
-            let tf = k ? this._grid(f, k) : f;
+            let tf;
+            if (!(tf = k ? this._grid(f, k) : f)) return;
             if (e) {
                 (!tf._ || tf._.del != null) && (tf.df.cannot_delete_rows = tf._ ? tf._.del : false);
-                k && tf._ && delete tf._.del;
+                if (k && tf._) delete tf._.del;
             } else {
                 (tf._ = tf._ || {}) && tf._.del == null && (tf._.del = tf.df.cannot_delete_rows);
                 tf.df.cannot_delete_rows = true;
@@ -516,7 +520,8 @@
             return 1;
         },
         toggle_edit(f, k, g, e) {
-            let tf = k ? this._grid(f, k) : f;
+            let tf;
+            if (!(tf = k ? this._grid(f, k) : f)) return;
             if (e) {
                 (!tf._ || tf._.edit != null) && (tf.df.in_place_edit = tf._ ? tf._.edit : true);
                 tf._ && tf._.grid != null && tf.meta && (tf.meta.editable_grid = tf._.grid);
@@ -544,10 +549,11 @@
             return 1;
         },
         toggle_sort(f, k, e) {
-            let tf = k ? this._grid(f, k) : f;
+            let tf;
+            if (!(tf = k ? this._grid(f, k) : f)) return;
             if (e) {
                 (!tf._ || tf._.sort != null) && (tf.sortable_status = tf._ ? tf._.sort : true);
-                k && tf._ && delete tf._.sort;
+                if (k && tf._) delete tf._.sort;
             } else {
                 (tf._ = tf._ || {}) && tf._.sort == null && (tf._.sort = tf.sortable_status);
                 tf.sortable_status = false;
@@ -556,10 +562,11 @@
             return 1;
         },
         toggle_check(f, k, e) {
-            let tf = k ? this._grid(f, k) : f;
+            let tf;
+            if (!(tf = k ? this._grid(f, k) : f)) return;
             if (e) {
                 (!tf._ || tf._.check) && tf.toggle_checkboxes(1);
-                k && tf._ && delete tf._.check;
+                if (k && tf._) delete tf._.check;
             } else {
                 (tf._ = tf._ || {}) && (tf._.check = 1) && tf.toggle_checkboxes(0);
             }
