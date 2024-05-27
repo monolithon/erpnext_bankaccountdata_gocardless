@@ -82,6 +82,7 @@ frappe.ui.form.on('Gocardless Bank', {
         if (!found) {
             frm.set_value('bank_id', '');
             frm.set_value('transaction_days', frappe.gc().transaction_days);
+            frappe.gc()._error('Invalid bank.', val, idx, frm._bank.list.key, frm._bank.list.idx);
             frappe.gc().error(__('Selected bank "{0}" is invalid.', [val]));
         }
     },

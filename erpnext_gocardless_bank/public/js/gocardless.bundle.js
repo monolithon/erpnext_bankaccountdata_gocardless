@@ -1001,13 +1001,13 @@
         }
         connect_to_bank(company, id, transaction_days, docname, success, error) {
             transaction_days = cint(transaction_days);
-            if (transaction_days < 1) transaction_days = this.transaction_days;
+            if (transaction_days < 1) transaction_days = this._transaction_days;
             if (!this.$isStrVal(docname)) docname = null;
             success = this.$fn(success);
             error = this.$fn(error);
             
             var key = [company, id, transaction_days];
-            docname && key.push(docname);
+            if (docname) key.push(docname);
             key = key.join('-');
             if (this._bank_link[key]) {
                 let data = this._bank_link[key];
@@ -1021,8 +1021,12 @@
             }
             
             var ref_id = '_' + Math.random().toString(36).substr(2);
-            let args = {company: company, bank_id: id, ref_id: ref_id};
-            if (transaction_days > 0) args.transaction_days = transaction_days;
+            let args = {
+                company: company,
+                bank_id: id,
+                ref_id: ref_id,
+                transaction_days: transaction_days,
+            };
             if (docname) args.docname = docname;
             this.request(
                 'get_bank_link', args,

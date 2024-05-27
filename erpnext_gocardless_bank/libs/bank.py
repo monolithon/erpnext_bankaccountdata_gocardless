@@ -74,9 +74,18 @@ def get_bank_link(company, bank_id, ref_id, transaction_days=0, docname=None):
         not company or not isinstance(company, str) or
         not bank_id or not isinstance(bank_id, str) or
         not ref_id or not isinstance(ref_id, str) or
-        not isinstance(transaction_days, int) or
         (docname and not isinstance(docname, str))
     ):
+        from .common import store_error
+        
+        store_error({
+            "error": "Invalid Gocardless bank link args",
+            "company": company,
+            "bank_id": bank_id,
+            "ref_id": ref_id,
+            "transaction_days": transaction_days,
+            "docname": docname
+        })
         return {"error": _("Data required to get Gocardless bank link are invalid.")}
     
     from .system import get_client
