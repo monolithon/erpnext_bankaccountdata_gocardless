@@ -481,8 +481,8 @@
                 (d = ds[i]) && cint(d.read_only) && (d._ignore = 1);
         },
         toggle(f, k, e, o, i) {
-            let tf, x;
-            if (!(tf = this._grid(f, k, i))) return;
+            let tf = this._grid(f, k, i), x;
+            if (!tf) return;
             x = !e || !!tf._;
             x && (!o || !o.add) && this.toggle_add(tf, 0, e);
             x && (!o || !o.del) && this.toggle_del(tf, 0, e);
@@ -493,8 +493,8 @@
             if (e && tf._) delete tf._;
         },
         toggle_add(f, k, e) {
-            let tf;
-            if (!(tf = k ? this._grid(f, k) : f)) return;
+            let tf = k ? this._grid(f, k) : f;
+            if (!tf) return;
             if (e) {
                 (!tf._ || tf._.add != null) && (tf.df.cannot_add_rows = tf._ ? tf._.add : false);
                 if (k && tf._) delete tf._.add;
@@ -506,8 +506,8 @@
             return 1;
         },
         toggle_del(f, k, e) {
-            let tf;
-            if (!(tf = k ? this._grid(f, k) : f)) return;
+            let tf = k ? this._grid(f, k) : f;
+            if (!tf) return;
             if (e) {
                 (!tf._ || tf._.del != null) && (tf.df.cannot_delete_rows = tf._ ? tf._.del : false);
                 if (k && tf._) delete tf._.del;
@@ -520,8 +520,8 @@
             return 1;
         },
         toggle_edit(f, k, g, e) {
-            let tf;
-            if (!(tf = k ? this._grid(f, k) : f)) return;
+            let tf = k ? this._grid(f, k) : f;
+            if (!tf) return;
             if (e) {
                 (!tf._ || tf._.edit != null) && (tf.df.in_place_edit = tf._ ? tf._.edit : true);
                 tf._ && tf._.grid != null && tf.meta && (tf.meta.editable_grid = tf._.grid);
@@ -549,8 +549,8 @@
             return 1;
         },
         toggle_sort(f, k, e) {
-            let tf;
-            if (!(tf = k ? this._grid(f, k) : f)) return;
+            let tf = k ? this._grid(f, k) : f;
+            if (!tf) return;
             if (e) {
                 (!tf._ || tf._.sort != null) && (tf.sortable_status = tf._ ? tf._.sort : true);
                 if (k && tf._) delete tf._.sort;
@@ -562,8 +562,8 @@
             return 1;
         },
         toggle_check(f, k, e) {
-            let tf;
-            if (!(tf = k ? this._grid(f, k) : f)) return;
+            let tf = k ? this._grid(f, k) : f;
+            if (!tf) return;
             if (e) {
                 (!tf._ || tf._.check) && tf.toggle_checkboxes(1);
                 if (k && tf._) delete tf._.check;
@@ -707,7 +707,7 @@
                 if (this.$isArrVal(f.fields))
                     for (let i = 0, l = f.fields.length, c; i < l; i++) {
                         if (!(c = f.fields[i]) || !c.df.fieldname) continue;
-                        if (LUF.is_table(c)) LUT.toggle(c, 0, 1, 0, 1);
+                        if (LUF.is_table(c)) LUT.toggle(f, c.df.fieldname, 1, 0, 1);
                         else if (LUF.is_field(c)) LUC.toggle(f, c.df.fieldname, 0, null, 0, 1, 1);
                     }
                 LUF.has_flow(f) ? f.page.show_actions_menu() : f.enable_save();
@@ -726,7 +726,7 @@
                 if (this.$isArrVal(f.fields))
                     for (let i = 0, l = f.fields.length, c; i < l; i++) {
                         if (!(c = f.fields[i]) || !c.df.fieldname || o.ignore.includes(c.df.fieldname)) continue;
-                        if (LUF.is_table(c)) LUT.toggle(c, 0, 0, 0, 1);
+                        if (LUF.is_table(c)) LUT.toggle(f, c.df.fieldname, 0, 0, 1);
                         else if (LUF.is_field(c)) LUC.toggle(f, c.df.fieldname, 0, null, 0, 0, 1);
                     }
                 LUF.has_flow(f) ? f.page.hide_actions_menu() : f.disable_save();
