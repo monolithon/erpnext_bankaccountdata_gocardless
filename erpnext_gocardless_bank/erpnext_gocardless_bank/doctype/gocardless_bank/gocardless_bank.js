@@ -215,7 +215,7 @@ frappe.ui.form.on('Gocardless Bank', {
         !frm._bank.inits.banks_field && frappe.gc_banks.field(frm);
         data = frappe.gc_banks.load(country);
         if (data) {
-            frappe.gc_banks.get_cache(frm, country, data);
+            frappe.gc_banks.store(frm, country, data);
             return frappe.gc_banks.update(frm, country, data);
         }
         frappe.gc().request(
