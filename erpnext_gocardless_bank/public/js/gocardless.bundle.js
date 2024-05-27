@@ -69,6 +69,12 @@
             else for (let i = 0, x = 0, l = v.length; i < l; i++) { r[x++] = fn(v[i], i); }
             return r;
         },
+        $reduce(v, fn, r) {
+            if (!(fn = this.$fn(fn))) return r;
+            if (this.$isBaseObj(v)) for (let k in v) { this.$hasProp(k, v) && fn(v[k], k, r); }
+            else for (let i = 0, x = 0, l = v.length; i < l; i++) { fn(v[i], i, r); }
+            return r;
+        },
         $assign() {
             let a = arguments.length && this.$filter(arguments, this.$isBaseObj);
             if (!a || !a.length) return {};
@@ -379,7 +385,9 @@
         has_flow(f) { try { return f && !f.is_new() && f.states && f.states.get_state(); } catch(_) {} },
         is_field(f) { return f && f.df && !/^((Tab|Section|Column) Break|Table)$/.test(f.df.fieldtype); },
         is_table(f) { return f && f.df && f.df.fieldtype === 'Table'; },
-        get_field(f, k, g, r, c, d) {
+    },
+    LUC = {
+        get(f, k, g, r, c, d) {
             try {
                 f = f.get_field(k);
                 if (g || r != null) f = f.grid;
@@ -388,13 +396,13 @@
                 return f;
             } catch(_) {}
         },
-        reload_field(f, k, r, c) {
+        reload(f, k, r, c) {
             if (r != null && !c) {
-                try { (LU.$isNum(r) || LU.$isStrVal(r)) && (f = this.get_field(f, k, 1)) && f.refresh_row(r); } catch(_) {}
+                try { (LU.$isNum(r) || LU.$isStrVal(r)) && (f = this.get(f, k, 1)) && f.refresh_row(r); } catch(_) {}
                 return;
             }
             if (r != null && c) {
-                if (!LU.$isStrVal(c) || !(f = this.get_field(f, k, 1, r))) return;
+                if (!LU.$isStrVal(c) || !(f = this.get(f, k, 1, r))) return;
                 try {
                     (r = f.on_grid_fields_dict[c]) && r.refresh && r.refresh();
                     (r = f.grid_form && f.grid_form.refresh_field) && r(c);
@@ -405,7 +413,7 @@
                 try { LU.$isStrVal(k) && f.refresh_field && f.refresh_field(k); } catch(_) {}
                 return;
             }
-            if (!LU.$isStrVal(c) || !(f = this.get_field(f, k, 1)) || !LU.$isArrVal(f.grid_rows)) return;
+            if (!LU.$isStrVal(c) || !(f = this.get(f, k, 1)) || !LU.$isArrVal(f.grid_rows)) return;
             try {
                 for (let i = 0, l = f.grid_rows, x; i < l; i++) {
                     r = f.grid_rows[i];
@@ -414,11 +422,11 @@
                 }
             } catch(_) {}
         },
-        field_prop(f, k, g, r, c, p, v) {
-            if (LU.$isBaseObj(k)) for (let x in k) { this.field_prop(f, x, g, r, c, k[x]); }
-            else if (LU.$isBaseObj(c)) for (let x in c) { this.field_prop(f, k, g, r, x, c[x]); }
+        prop(f, k, g, r, c, p, v) {
+            if (LU.$isBaseObj(k)) for (let x in k) { this.prop(f, x, g, r, c, k[x]); }
+            else if (LU.$isBaseObj(c)) for (let x in c) { this.prop(f, k, g, r, x, c[x]); }
             else {
-                (g || r != null) && (f = this.get_field(f, k, g, r)) && (k = c);
+                (g || r != null) && (f = this.get(f, k, g, r)) && (k = c);
                 let m = r != null ? 'set_field_property' : (g ? 'update_docfield_property' : 'set_df_property');
                 try {
                     if (!LU.$isBaseObj(p)) f[m](k, p, v);
@@ -427,20 +435,23 @@
                 } catch(_) {}
             }
         },
-        toggle_field(f, k, g, r, c, e, i) {
-            let tf = this.get_field(f, k, g, r, c, 1);
+        toggle(f, k, g, r, c, e, i) {
+            let tf = this.get(f, k, g, r, c, 1);
             e = e ? 0 : 1;
             if (!tf || !tf.df || cint(tf.df.hidden) || (i && tf.df._ignore) || cint(tf.df.read_only) === e) return;
-            this.field_prop(f, k, g, r, c, 'read_only', e);
-            this._toggle_translatable(tf, e ? 1 : 0);
+            this.prop(f, k, g, r, c, 'read_only', e);
+            try {
+                tf.df.translatable && tf.$wrapper
+                && (tf = tf.$wrapper.find('.clearfix .btn-translation')) && tf.hidden(e ? 0 : 1);
+            } catch(_) {}
         },
-        get_field_desc(f, k, g, r, c, b) {
-            k && (f = this.get_field(f, k, g, r, c, 1));
+        get_desc(f, k, g, r, c, b) {
+            k && (f = this.get(f, k, g, r, c, 1));
             return cstr((f && f.df && ((b && f.df._description) || (!b && f.df.description))) || '');
         },
-        field_desc(f, k, g, r, c, m) {
+        desc(f, k, g, r, c, m) {
             let x = 0;
-            k && (f = this.get_field(f, k, g, r, c, 1));
+            k && (f = this.get(f, k, g, r, c, 1));
             if (f.df._description == null) f.df._description = f.df.description || '';
             if (!LU.$isStr(m)) m = '';
             try {
@@ -453,39 +464,33 @@
             } catch(_) {}
             return x;
         },
-        field_status(f, k, g, r, c, m) {
-            let v = LU.$isStrVal(m), tf = this.get_field(f, k, g, r, c, 1), x = 0;
+        status(f, k, g, r, c, m) {
+            let v = LU.$isStrVal(m), tf = this.get(f, k, g, r, c, 1), x = 0;
             if ((!v && tf.df.invalid) || (v && !tf.df.invalid))
                 try {
                     ++x && ((tf.df.invalid = v ? 1 : 0) || 1) && tf.set_invalid && tf.set_invalid();
                 } catch(_) {}
-            this.field_desc(tf, 0, 0, null, 0, m) && x++;
-            x && this.reload_field(f, k, r, c);
-        },
-        _toggle_translatable(f, s) {
-            try {
-                f.df.translatable && f.$wrapper
-                && (f = f.$wrapper.find('.clearfix .btn-translation')) && f.hidden(!s);
-            } catch(_) {}
+            this.desc(tf, 0, 0, null, 0, m) && x++;
+            x && this.reload(f, k, r, c);
         },
     },
     LUT = {
-        setup_table(f, k) {
+        setup(f, k) {
             cint(k.df.read_only) && (k.df._ignore = 1);
-            for (let ds = this._docfields(this._grid(f, k.df.fieldname)), i = 0, l = ds.length, d; i < l; i++)
+            for (let ds = this._fields(this._grid(f, k.df.fieldname)), i = 0, l = ds.length, d; i < l; i++)
                 (d = ds[i]) && cint(d.read_only) && (d._ignore = 1);
         },
-        toggle_table(f, k, e, o, i) {
+        toggle(f, k, e, o, i) {
             let tf = this._grid(f, k, i), x = !e || tf._;
-            x && (!o || !o.add) && this.toggle_table_add(tf, 0, e);
-            x && (!o || !o.del) && this.toggle_table_del(tf, 0, e);
-            x && (!o || !o.edit) && this.toggle_table_edit(tf, 0, o && o.keep, e);
-            x && (!o || !o.sort) && this.toggle_table_sort(tf, 0, e);
-            LUF.reload_field(f, k);
-            x && (!o || !o.del) && this.toggle_table_check(tf, 0, e);
+            x && (!o || !o.add) && this.toggle_add(tf, 0, e);
+            x && (!o || !o.del) && this.toggle_del(tf, 0, e);
+            x && (!o || !o.edit) && this.toggle_edit(tf, 0, o && o.keep, e);
+            x && (!o || !o.sort) && this.toggle_sort(tf, 0, e);
+            LUC.reload(f, k);
+            x && (!o || !o.del) && this.toggle_check(tf, 0, e);
             e && delete tf._;
         },
-        toggle_table_add(f, k, e) {
+        toggle_add(f, k, e) {
             let tf = k ? this._grid(f, k) : f;
             if (e) {
                 (!tf._ || tf._.add != null) && (tf.df.cannot_add_rows = tf._ ? tf._.add : false);
@@ -494,10 +499,10 @@
                 (tf._ = tf._ || {}) && tf._.add == null && (tf._.add = tf.df.cannot_add_rows);
                 tf.df.cannot_add_rows = true;
             }
-            k && LUF.reload_field(f, k);
+            k && LUC.reload(f, k);
             return 1;
         },
-        toggle_table_del(f, k, e) {
+        toggle_del(f, k, e) {
             let tf = k ? this._grid(f, k) : f;
             if (e) {
                 (!tf._ || tf._.del != null) && (tf.df.cannot_delete_rows = tf._ ? tf._.del : false);
@@ -506,22 +511,22 @@
                 (tf._ = tf._ || {}) && tf._.del == null && (tf._.del = tf.df.cannot_delete_rows);
                 tf.df.cannot_delete_rows = true;
             }
-            k && LUF.reload_field(f, k);
-            k && this.toggle_table_check(tf, 0, e);
+            k && LUC.reload(f, k);
+            k && this.toggle_check(tf, 0, e);
             return 1;
         },
-        toggle_table_edit(f, k, g, e) {
+        toggle_edit(f, k, g, e) {
             let tf = k ? this._grid(f, k) : f;
             if (e) {
                 (!tf._ || tf._.edit != null) && (tf.df.in_place_edit = tf._ ? tf._.edit : true);
                 tf._ && tf._.grid != null && tf.meta && (tf.meta.editable_grid = tf._.grid);
                 (!tf._ || tf._.static != null) && (tf.static_rows = tf._ ? tf._.static : false);
                 if (tf._ && tf._.read && tf._.read.length) {
-                    for (let ds = this._docfields(tf), i = 0, l = ds.length, d; i < l; i++)
+                    for (let ds = this._fields(tf), i = 0, l = ds.length, d; i < l; i++)
                         (d = ds[i]) && !d._ignore && tf._.read.includes(d.fieldname) && (d.read_only = 0);
                 }
                 if (k && tf._) for (let x = ['edit', 'grid', 'static', 'read'], i = 0; i < 4; i++) { delete tf._[x[i]]; }
-                k && LUF.reload_field(f, k);
+                k && LUC.reload(f, k);
                 return 1;
             }
             (tf._ = tf._ || {}) && tf._.edit == null && (tf._.edit = tf.df.in_place_edit);
@@ -531,14 +536,14 @@
             tf._.static == null && (tf._.static = tf.static_rows);
             tf.static_rows = true;
             tf._.read == null && (tf._.read = []);
-            for (let ds = this._docfields(tf), i = 0, x = 0, l = ds.length, d; i < l; i++)
+            for (let ds = this._fields(tf), i = 0, x = 0, l = ds.length, d; i < l; i++)
                 (d = ds[i]) && !d._ignore && !tf._.read.includes(d.fieldname)
                 && (!g || !g.includes(d.fieldname)) && (d.read_only = 1)
                 && (tf._.read[x++] = d.fieldname);
-            k && LUF.reload_field(f, k);
+            k && LUC.reload(f, k);
             return 1;
         },
-        toggle_table_sort(f, k, e) {
+        toggle_sort(f, k, e) {
             let tf = k ? this._grid(f, k) : f;
             if (e) {
                 (!tf._ || tf._.sort != null) && (tf.sortable_status = tf._ ? tf._.sort : true);
@@ -547,10 +552,10 @@
                 (tf._ = tf._ || {}) && tf._.sort == null && (tf._.sort = tf.sortable_status);
                 tf.sortable_status = false;
             }
-            k && LUF.reload_field(f, k);
+            k && LUC.reload(f, k);
             return 1;
         },
-        toggle_table_check(f, k, e) {
+        toggle_check(f, k, e) {
             let tf = k ? this._grid(f, k) : f;
             if (e) {
                 (!tf._ || tf._.check) && tf.toggle_checkboxes(1);
@@ -561,9 +566,9 @@
             return 1;
         },
         _grid(f, k, i) {
-            return ((!k && (f = f.grid)) || (f = LUF.get_field(f, k, 1))) && !cint(f.df.hidden) && (!i || !f.df._ignore) && f;
+            return ((!k && (f = f.grid)) || (f = LUC.get(f, k, 1))) && !cint(f.df.hidden) && (!i || !f.df._ignore) && f;
         },
-        _docfields(f) {
+        _fields(f) {
             let ds = [];
             if (LU.$isArrVal(f.grid_rows)) {
                 for (let i = 0, l = f.grid_rows.length, r; i < l; i++)
@@ -680,12 +685,12 @@
                 try {
                     for (let i = 0, l = f.fields.length, c; i < l; i++) {
                         if (!(c = f.fields[i])) continue;
-                        if (LUF.is_table(c)) LUT.setup_table(f, c);
+                        if (LUF.is_table(c)) LUT.setup(f, c);
                         else if (LUF.is_field(c) && cint(c.df.read_only)) c.df._ignore = 0;
                     }
                 } catch(_) {}
             if (this._is_enabled) this.enable_form(f);
-            else this.disable_form(f, this.app_disabled_note);
+            else this.disable_form(f, {message: this.app_disabled_note});
             n && this.off('page_clean').once('page_clean', function() { this.enable_form(f); });
             return this;
         }
@@ -695,8 +700,8 @@
                 if (this.$isArrVal(f.fields))
                     for (let i = 0, l = f.fields.length, c; i < l; i++) {
                         if (!(c = f.fields[i]) || !c.df.fieldname) continue;
-                        if (LUF.is_table(c)) LUT.toggle_table(c, 0, 1, 0, 1);
-                        else if (LUF.is_field(c)) LUF.toggle_field(f, c.df.fieldname, 0, null, 0, 1, 1);
+                        if (LUF.is_table(c)) LUT.toggle(c, 0, 1, 0, 1);
+                        else if (LUF.is_field(c)) LUC.toggle(f, c.df.fieldname, 0, null, 0, 1, 1);
                     }
                 LUF.has_flow(f) ? f.page.show_actions_menu() : f.enable_save();
                 f.set_intro();
@@ -707,17 +712,18 @@
             }
             return this;
         }
-        disable_form(f, m, r) {
+        disable_form(f, o) {
             if (!(f = this.get_form(f)) || (f[this._tmp] && f[this._tmp].disabled)) return this;
+            o = this.$assign({ignore: []}, o);
             try {
                 if (this.$isArrVal(f.fields))
                     for (let i = 0, l = f.fields.length, c; i < l; i++) {
-                        if (!(c = f.fields[i]) || !c.df.fieldname) continue;
-                        if (LUF.is_table(c)) LUT.toggle_table(c, 0, 0, 0, 1);
-                        else if (LUF.is_field(c)) LUF.toggle_field(f, c.df.fieldname, 0, null, 0, 0, 1);
+                        if (!(c = f.fields[i]) || !c.df.fieldname || o.ignore.includes(c.df.fieldname)) continue;
+                        if (LUF.is_table(c)) LUT.toggle(c, 0, 0, 0, 1);
+                        else if (LUF.is_field(c)) LUC.toggle(f, c.df.fieldname, 0, null, 0, 0, 1);
                     }
                 LUF.has_flow(f) ? f.page.hide_actions_menu() : f.disable_save();
-                f.set_intro(m, r || 'red');
+                if (o.message) f.set_intro(o.message, o.color || 'red');
             } catch(e) { this._error('Disable form', e.message, e.stack); }
             finally {
                 (f[this._tmp] || (f[this._tmp] = {})) && (f[this._tmp].disabled = 1);
@@ -725,114 +731,110 @@
             }
             return this;
         }
-        get_field(f, k) { if ((f = this.get_form(f))) return LUF.get_field(f, k); }
-        get_grid(f, k) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1); }
-        get_tfield(f, k, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, null, c); }
-        get_row(f, k, r) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r); }
-        get_rfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c); }
-        get_rmfield(f, k, r, c) { if ((f = this.get_form(f))) return LUF.get_field(f, k, 1, r, c, 1); }
+        get_field(f, k) { if ((f = this.get_form(f))) return LUC.get(f, k); }
+        get_grid(f, k) { if ((f = this.get_form(f))) return LUC.get(f, k, 1); }
+        get_tfield(f, k, c) { if ((f = this.get_form(f))) return LUC.get(f, k, 1, null, c); }
+        get_row(f, k, r) { if ((f = this.get_form(f))) return LUC.get(f, k, 1, r); }
+        get_rfield(f, k, r, c) { if ((f = this.get_form(f))) return LUC.get(f, k, 1, r, c); }
+        get_rmfield(f, k, r, c) { if ((f = this.get_form(f))) return LUC.get(f, k, 1, r, c, 1); }
         reload_field(f, k) {
-            (f = this.get_form(f)) && LUF.reload_field(f, k);
+            (f = this.get_form(f)) && LUC.reload(f, k);
             return this;
         }
         reload_tfield(f, k, c) {
-            (f = this.get_form(f)) && LUF.reload_field(f, k, null, c);
+            (f = this.get_form(f)) && LUC.reload(f, k, null, c);
             return this;
         }
         reload_row(f, k, r) {
-            (f = this.get_form(f)) && LUF.reload_field(f, k, r);
+            (f = this.get_form(f)) && LUC.reload(f, k, r);
             return this;
         }
         reload_rfield(f, k, r, c) {
-            (f = this.get_form(f)) && LUF.reload_field(f, k, r, c);
+            (f = this.get_form(f)) && LUC.reload(f, k, r, c);
             return this;
         }
         field_prop(f, k, p, v) {
-            (f = this.get_form(f)) && LUF.field_prop(f, k, 0, null, 0, p, v);
+            (f = this.get_form(f)) && LUC.prop(f, k, 0, null, 0, p, v);
             return this;
         }
         tfield_prop(f, k, c, p, v) {
-            (f = this.get_form(f)) && LUF.field_prop(f, k, 1, null, c, p, v);
+            (f = this.get_form(f)) && LUC.prop(f, k, 1, null, c, p, v);
             return this;
         }
         rfield_prop(f, k, r, c, p, v) {
-            (f = this.get_form(f)) && LUF.field_prop(f, k, 1, r, c, p, v);
+            (f = this.get_form(f)) && LUC.prop(f, k, 1, r, c, p, v);
             return this;
         }
         toggle_field(f, k, e) {
-            (f = this.get_form(f)) && LUF.toggle_field(f, k, 0, null, 0, e);
+            (f = this.get_form(f)) && LUC.toggle(f, k, 0, null, 0, e);
             return this;
         }
-        toggle_table(f, k, e) {
-            (f = this.get_form(f)) && LUT.toggle_table(f, k, e ? 1 : 0);
+        toggle_table(f, k, e, o) {
+            (f = this.get_form(f)) && LUT.toggle(f, k, e ? 1 : 0, o);
             return this;
         }
-        toggle_table_add(f, k, e) {
-            (f = this.get_form(f)) && LUT.toggle_table_add(f, k, e ? 1 : 0) && LUF.reload_field(f, k);
+        toggle_tfield(f, k, c, e) {
+            (f = this.get_form(f)) && LUC.toggle(f, k, 1, null, c, e);
             return this;
         }
-        toggle_table_edit(f, k, i, e) {
+        toggle_rfield(f, k, r, c, e) {
+            (f = this.get_form(f)) && LUC.toggle(f, k, 1, r, c, e);
+            return this;
+        }
+        table_add(f, k, e) {
+            (f = this.get_form(f)) && LUT.toggle_add(f, k, e ? 1 : 0);
+            return this;
+        }
+        table_edit(f, k, i, e) {
             if (!this.$isArrVal(i)) {
                 if (e == null) e = i;
                 i = null;
             }
-            (f = this.get_form(f)) && LUT.toggle_table_edit(f, k, i, e ? 1 : 0) && LUF.reload_field(f, k);
+            (f = this.get_form(f)) && LUT.toggle_edit(f, k, i, e ? 1 : 0);
             return this;
         }
-        toggle_table_del(f, k, e) {
-            (f = this.get_form(f)) && LUT.toggle_table_del(f, k, e ? 1 : 0) && LUF.reload_field(f, k);
+        table_del(f, k, e) {
+            (f = this.get_form(f)) && LUT.toggle_del(f, k, e ? 1 : 0);
             return this;
         }
-        toggle_table_sort(f, k, e) {
-            (f = this.get_form(f)) && LUT.toggle_table_sort(f, k, e ? 1 : 0) && LUF.reload_field(f, k);
-            return this;
-        }
-        toggle_table_check(f, k, e) {
-            (f = this.get_form(f)) && LUT.toggle_table_check(f, k, e ? 1 : 0) && LUF.reload_field(f, k);
-            return this;
-        }
-        toggle_tfield(f, k, c, e) {
-            (f = this.get_form(f)) && LUF.toggle_field(f, k, 1, null, c, e);
-            return this;
-        }
-        toggle_rfield(f, k, r, c, e) {
-            (f = this.get_form(f)) && LUF.toggle_field(f, k, 1, r, c, e);
+        table_sort(f, k, e) {
+            (f = this.get_form(f)) && LUT.toggle_sort(f, k, e ? 1 : 0);
             return this;
         }
         field_view(f, k, s) { return this.field_prop(f, k, 'hidden', s ? 0 : 1); }
         tfield_view(f, k, c, s) { return this.tfield_prop(f, k, c, 'hidden', s ? 0 : 1); }
         rfield_view(f, k, r, c, s) { return this.rfield_prop(f, k, r, c, 'hidden', s ? 0 : 1); }
         field_desc(f, k, m) {
-            (f = this.get_form(f)) && LUF.field_desc(f, k, 0, null, 0, m);
+            (f = this.get_form(f)) && LUC.desc(f, k, 0, null, 0, m);
             return this;
         }
         tfield_desc(f, k, c, m) {
-            (f = this.get_form(f)) && LUF.field_desc(f, k, 1, null, c, m);
+            (f = this.get_form(f)) && LUC.desc(f, k, 1, null, c, m);
             return this;
         }
         rfield_desc(f, k, r, c, m) {
-            (f = this.get_form(f)) && LUF.field_desc(f, k, 1, r, c, m);
+            (f = this.get_form(f)) && LUC.desc(f, k, 1, r, c, m);
             return this;
         }
         get_field_desc(f, k, b) {
-            return ((f = this.get_form(f)) && LUF.get_field_desc(f, k, 0, null, 0, b)) || '';
+            return ((f = this.get_form(f)) && LUC.get_desc(f, k, 0, null, 0, b)) || '';
         }
         get_tfield_desc(f, k, c, b) {
-            return ((f = this.get_form(f)) && LUF.get_field_desc(f, k, 1, null, c, b)) || '';
+            return ((f = this.get_form(f)) && LUC.get_desc(f, k, 1, null, c, b)) || '';
         }
         get_rfield_desc(f, k, r, c, b) {
-            return ((f = this.get_form(f)) && LUF.get_field_desc(f, k, 1, r, c, b)) || '';
+            return ((f = this.get_form(f)) && LUC.get_desc(f, k, 1, r, c, b)) || '';
         }
         field_status(f, k, m) {
-            (f = this.get_form(f)) && LUF.field_status(f, k, 0, null, 0, m);
+            (f = this.get_form(f)) && LUC.status(f, k, 0, null, 0, m);
             return this;
         }
         tfield_status(f, k, c, m) {
-            (f = this.get_form(f)) && LUF.field_status(f, k, 1, null, c, m);
+            (f = this.get_form(f)) && LUC.status(f, k, 1, null, c, m);
             return this;
         }
         rfield_status(f, k, r, c, m) {
-            (f = this.get_form(f)) && LUF.field_status(f, k, 1, r, c, m);
+            (f = this.get_form(f)) && LUC.status(f, k, 1, r, c, m);
             return this;
         }
     }
@@ -935,21 +937,23 @@
             let k = u + (w > 0 ? '_w' + w : '') + (h > 0 ? '_h' + h : ''),
             v = this._c.get(k);
             if (LU.$isStrVal(v)) return v;
-            let i = new Image();
-            i.src = u;
-            i.crossOrigin = 'Anonymous';
-            i.onload = LU.$afn(function(me, k) {
-                let tw = w > 0 && w < this.width ? w : this.width,
-                th = h > 0 && h < this.height ? h : this.height,
-                c = LU.$makeElem('canvas'),
-                x = c.getContext('2d');
-                c.width = tw;
-                c.height = th;
-                x.drawImage(this, 0, 0, tw, th);
-                let e = u.split('.').pop().toLowerCase();
-                e = 'image/' + (e === 'jpg' ? 'jpeg' : e);
-                me._c.set(k, c.toDataURL(e), t);
-            }, [this, k], i);
+            try {
+                let i = new Image();
+                i.src = u;
+                i.crossOrigin = 'Anonymous';
+                i.onload = LU.$afn(function(me, k) {
+                    let tw = w > 0 && w < this.width ? w : this.width,
+                    th = h > 0 && h < this.height ? h : this.height,
+                    c = LU.$makeElem('canvas'),
+                    x = c.getContext('2d');
+                    c.width = tw;
+                    c.height = th;
+                    x.drawImage(this, 0, 0, tw, th);
+                    let e = u.split('.').pop().toLowerCase();
+                    e = 'image/' + (e === 'jpg' ? 'jpeg' : e);
+                    me._c.set(k, c.toDataURL(e), t);
+                }, [this, k], i);
+            } catch(_) {}
             return u;
         }
     }
@@ -968,6 +972,7 @@
                 is_ready: false,
                 is_enabled: false,
                 is_debug: false,
+                transaction_days: 90,
             });
             this._bank_link = {};
             this.request(
@@ -989,12 +994,12 @@
         }
         connect_to_bank(company, id, transaction_days, docname, success, error) {
             transaction_days = cint(transaction_days);
+            if (transaction_days < 1) transaction_days = this.transaction_days;
             if (!this.$isStrVal(docname)) docname = null;
             success = this.$fn(success);
             error = this.$fn(error);
             
-            var key = [company, id];
-            transaction_days > 0 && key.push(transaction_days);
+            var key = [company, id, transaction_days];
             docname && key.push(docname);
             key = key.join('-');
             if (this._bank_link[key]) {

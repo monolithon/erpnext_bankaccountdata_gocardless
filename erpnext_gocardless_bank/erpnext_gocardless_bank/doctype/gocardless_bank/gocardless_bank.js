@@ -25,7 +25,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 data: {},
                 cache: {},
                 idx: {},
-                time: 2 * 24 * 60 * 60
+                time: 2 * 24 * 60 * 60,
             },
         };
         frm.set_query('company', function(doc) {
@@ -37,7 +37,7 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     refresh: function(frm) {
         if (frm.doc.__needs_refresh) return frm.reload_doc();
-        frm.events.check_status(frm);
+        if (!frm.is_new()) frm.events.check_status(frm);
         frm.events.setup_errors(frm);
         frm.events.load_banks(frm);
     },
@@ -73,11 +73,17 @@ frappe.ui.form.on('Gocardless Bank', {
             idx = frm._bank.list.cache[frm._bank.list.key][idx];
             if (idx && idx.id) {
                 frm.set_value('bank_id', idx.id);
-                frm.set_value('transaction_days', cint(idx.transaction_total_days || 90));
+                let tdays = cint(idx.transaction_total_days);
+                if (tdays < 1) tdays = frappe.gc().transaction_days;
+                frm.set_value('transaction_days', tdays);
                 found++;
             }
         }
-        if (!found) frappe.gc().error(__('Selected bank "{0}" is invalid.', [val]));
+        if (!found) {
+            frm.set_value('bank_id', '');
+            frm.set_value('transaction_days', frappe.gc().transaction_days);
+            frappe.gc().error(__('Selected bank "{0}" is invalid.', [val]));
+        }
     },
     validate: function(frm) {
         if (!frappe.gc().$isStrVal(frm.doc.company)) {
@@ -96,10 +102,8 @@ frappe.ui.form.on('Gocardless Bank', {
             frappe.gc().fatal(__('Bank id for selected bank isn\'t found.'));
             return false;
         }
-        if (cint(frm.doc.transaction_days) < 1) frm.set_value('transaction_days', 180);
-    },
-    after_save: function(frm) {
-        frm.events.check_status(frm);
+        if (cint(frm.doc.transaction_days) < 1)
+            frm.set_value('transaction_days', frappe.gc().transaction_days);
     },
     check_status: function(frm) {
         if (frm.is_new()) return;
@@ -108,9 +112,7 @@ frappe.ui.form.on('Gocardless Bank', {
             && frappe.gc().$isStrVal(frm.doc.bank)
         ) {
             frm._bank.is_set++;
-            let key = 'bank',
-            val = cstr(frm.doc[key]);
-            frm.get_field(key).set_data([{label: __(val), value: val}]);
+            frappe.gc_banks.reset(frm);
         }
         if (frm._bank.is_auth) {
             frm.events.setup_toolbar(frm, 1);
@@ -209,7 +211,8 @@ frappe.ui.form.on('Gocardless Bank', {
     load_banks: function(frm) {
         if (frm._bank.is_set) return;
         let country = cstr(frm.doc.country);
-        if (!country.length || frm._bank.list.key === country) return;
+        if (!country.length) return frappe.gc_banks.reset(frm, 1);
+        if (frm._bank.list.key === country) return;
         let data = frm._bank.list.data[country];
         if (data) return frappe.gc_banks.update(frm, country, data, 1);
         !frm._bank.inits.banks_field && frappe.gc_banks.field(frm);
@@ -321,18 +324,34 @@ frappe.gc_banks = {
         let field = frm.get_field('bank');
         if (!field || !field.awesomplete || !frappe.gc().$isFunc(field.awesomplete.item)) return;
         frm._bank.inits.banks_field = 1;
+        if (!field.awesomplete.__item)
+            field.awesomplete.__item = field.awesomplete.item;
         field.awesomplete.item = function(item) {
+            if (!cur_frm || cur_frm.doctype !== 'Gocardless Bank') {
+                if (!this.__item) return window.location.reload(true);
+                else {
+                    this.item = this.__item;
+                    return this.item(item);
+                }
+            }
             let d = this.get_item(item.value);
             if (!d) d = item;
             if (!d.label) d.label = d.value;
             let idx = frm._bank.list.idx[frm._bank.list.key][d.value],
-            html = '<strong>' + d.label + '</strong>';
+            html = '<strong>' + d.label + '</strong>',
+            img = '<img src="{0}" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/>',
+            fnd = 0;
             if (frappe.gc().$isNum(idx) && idx >= 0) {
                 idx = frm._bank.list.cache[frm._bank.list.key][idx];
-                if (idx && idx.logo) html = '<img src="{url}" alt="{name}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> '
-                .replace('{name}', idx.name).replace('{url}', frappe.gc().image().load(
-                    idx.logo, 18, 18, frm._bank.list.time
-                )) + html;
+                if (idx && frappe.gc().$isStrVal(idx.logo) && ++fnd)
+                    html = img.replace('{1}', idx.name).replace('{0}', frappe.gc().image().load(
+                        idx.logo, 18, 18, frm._bank.list.time
+                    )) + html;
+            }
+            if (!fnd) {
+                idx = idx && frappe.gc().$isStrVal(idx.name) ? idx.name : 'Bank';
+                html = img.replace('{1}', idx)
+                .replace('{0}', 'https://placehold.co/100x100/4b535a/fff/png?text=' + idx[0]) + html;
             }
             if (d.description) html += '<br><span class="small">' + __(d.description) + '</span>';
             return $('<li></li>')
@@ -343,10 +362,11 @@ frappe.gc_banks = {
         };
     },
     update: function(frm, country, data, ready) {
+        if (!frm._bank.inits.banks) frm._bank.inits.banks = 1;
         if (!ready) {
             frm._bank.list.idx[country] = {};
             data = frappe.gc().$map(data, function(v, i) {
-                if (this.$isStrVal(v.logo)) frm._bank.list.idx[country][v.name] = i;
+                frm._bank.list.idx[country][v.name] = i;
                 return {value: v.name, label: __(v.name)};
             });
             frm._bank.list.data[country] = data;
@@ -355,6 +375,14 @@ frappe.gc_banks = {
         let field = frm.get_field('bank');
         field.set_data(data);
         field.translate_values = false;
+    },
+    reset: function(frm, empty) {
+        if (frm._bank.inits.banks) delete frm._bank.inits.banks;
+        let field = frm.get_field('bank'),
+        val = cstr(frm.doc.bank),
+        data = [];
+        if (!empty && val.length) data.push({label: __(val), value: val});
+        field.set_data(data);
     },
 };
 

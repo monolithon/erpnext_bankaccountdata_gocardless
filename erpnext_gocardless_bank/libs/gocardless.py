@@ -123,6 +123,11 @@ class Gocardless:
                 log_error(_("Gocardless banks list received is invalid."))
                 return None
         
+        for v in data:
+            v.pop("countries", 0)
+            if cint(v.get("transaction_total_days", "")) < 1:
+                v["transaction_total_days"] = 90
+        
         return data
     
     
