@@ -69,7 +69,7 @@ frappe.ui.form.on('Gocardless Bank', {
         if (!idx) return;
         idx = idx[val];
         let found = 0;
-        if (frappe.gc().$isNum(idx) && idx > 0) {
+        if (frappe.gc().$isNum(idx) && idx >= 0) {
             idx = frm._bank.list.cache[frm._bank.list.key][idx];
             if (idx && idx.id) {
                 frm.set_value('bank_id', idx.id);
@@ -82,7 +82,6 @@ frappe.ui.form.on('Gocardless Bank', {
         if (!found) {
             frm.set_value('bank_id', '');
             frm.set_value('transaction_days', frappe.gc().transaction_days);
-            frappe.gc()._error('Invalid bank.', val, idx, frm._bank.list.key, frm._bank.list.idx);
             frappe.gc().error(__('Selected bank "{0}" is invalid.', [val]));
         }
     },
@@ -160,11 +159,13 @@ frappe.ui.form.on('Gocardless Bank', {
         
         let auth = frappe.gc().cache().pop(key);
         if (
-            !frappe.gc().$isDataObj(auth)
+            !auth
             || !frappe.gc().$isStrVal(auth.id)
             || !frappe.gc().$isStrVal(auth.expiry)
-        ) return frappe.gc().error(__('The authorization data for {0} is invalid.', [frm.doc.bank]));
-        
+        ) {
+            frappe.gc()._error('Invalid authorization data.', frm.doc.bank, auth);
+            return frappe.gc().error(__('The authorization data for {0} is invalid.', [frm.doc.bank]));
+        }
         frappe.gc().request(
             'save_bank_link',
             {

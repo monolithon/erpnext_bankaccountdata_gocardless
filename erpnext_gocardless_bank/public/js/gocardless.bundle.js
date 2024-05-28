@@ -853,10 +853,17 @@
             this._p = LU.$isStrVal(pfx) ? pfx : 'lu_';
         }
         has(k) { return this._get(k) != null; }
-        get(k) { return (k = this._get(k)) && k.___ != null ? k.___ : k; }
+        get(k) {
+            let v = this._get(k), t;
+            if (v == null || (t = LU.$parseJson(v)) == null) return v;
+            if (t.___ == null) return t;
+            if (t.e != null && t.e < (new Date()).getTime())
+                this.del(k) && (t = null);
+            return (t && t.___) || t;
+        }
         pop(k) {
             let v = this.get(k);
-            if (v != null) this.del(k);
+            v != null && this.del(k);
             return v;
         }
         set(k, v, t) {
@@ -880,15 +887,7 @@
             return this;
         }
         _get(k) {
-            if (!LU.$isStrVal(k)) return;
-            let v;
-            try { v = this._s.getItem((k = this._p + k)); } catch(_) { return; }
-            if (v == null || (v = LU.$parseJson(v)) == null || v.___ == null) return v;
-            if (v.e != null && v.e < (new Date()).getTime()) {
-                try { this._s.removeItem(k); } catch(_) {}
-                return;
-            }
-            return v.___;
+            if (LU.$isStrVal(k)) try { return this._s.getItem(this._p + k); } catch(_) {}
         }
     }
     LevelUp.prototype.cache = function() { return this._cache || (this._cache = new LevelUpCache(this._real)); };

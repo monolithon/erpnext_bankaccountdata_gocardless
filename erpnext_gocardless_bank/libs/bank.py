@@ -113,14 +113,11 @@ def save_bank_link(name, auth_id, auth_expiry):
     if not doc:
         return {"error": _("Gocardless bank \"{0}\" doesn't exist.").format(name)}
     
-    is_new = 0
-    if not doc.auth_id or not doc.bank_accounts:
-        is_new = 1
-    
+    is_new = 1 if not doc.auth_id or not doc.bank_accounts else 0
     doc.auth_id = auth_id
     doc.auth_expiry = auth_expiry
     doc.auth_status = "Linked"
-    doc.save()
+    doc.save(ignore_permissions=True)
     
     if is_new:
         enqueue_save_bank(doc.name, doc.bank, doc.company, auth_id)
