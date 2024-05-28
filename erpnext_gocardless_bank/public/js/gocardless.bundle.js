@@ -606,9 +606,9 @@
         get is_self() { return this._doc.test(this.route(1)); }
         is_doctype(v) { return this.route(1) === v; }
         _is_self_view(f) { return this._doc.test((f && f.doctype) || this.route(1)); }
-        get_list(f) { f = f || cur_list; if (this.$isObjLike(f)) return f; }
-        get_tree(f) { f = f || cur_tree; if (this.$isObjLike(f)) return f; }
-        get_form(f) { f = f || cur_frm; if (this.$isObjLike(f)) return f; }
+        get_list(f) { return this.$isObjLike((f = f || cur_list)) ? f : null; }
+        get_tree(f) { return this.$isObjLike((f = f || cur_tree)) ? f : null; }
+        get_form(f) { return this.$isObjLike((f = f || cur_frm)) ? f : null; }
         get app_disabled_note() { return __('{0} app is disabled.', [this._mod]); }
         setup_list(f) {
             if (!this.is_list || !(f = this.get_list(f)) || !this._is_self_view(f)) return this;
@@ -676,7 +676,7 @@
                     for (let i = 0, l = f.fields.length, c; i < l; i++) {
                         if (!(c = f.fields[i])) continue;
                         if (LUF.is_table(c)) LUT.setup(f, c);
-                        else if (LUF.is_field(c) && cint(c.df.read_only)) c.df._ignore = 0;
+                        else if (LUF.is_field(c) && cint(c.df.read_only)) c.df._ignore = 1;
                     }
                 } catch(_) {}
             if (this._is_enabled) this.enable_form(f);
