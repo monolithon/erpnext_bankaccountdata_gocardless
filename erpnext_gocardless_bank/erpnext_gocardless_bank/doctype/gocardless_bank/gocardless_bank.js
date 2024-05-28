@@ -279,7 +279,7 @@ frappe.ui.form.on('Gocardless Bank', {
                     auth_expiry = moment().add(cint(auth_expiry), 'days').format(frappe.defaultDateFormat);
                     this.cache().set(
                         'gocardless_' + ref_id,
-                        this.$toJson({id: auth_id, expiry: auth_expiry})
+                        {id: auth_id, expiry: auth_expiry}
                     );
                     this.info_(__('Redirecting to {0} authorization page.', [frm.doc.bank]));
                     this.$timeout(function() { window.location.href = link; }, 2000);

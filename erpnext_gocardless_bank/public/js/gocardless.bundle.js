@@ -84,51 +84,40 @@
         $extend() {
             let a = arguments.length && this.$filter(arguments, this.$isBaseObj);
             if (!a || a.length < 2) return a && a.length ? a[0] : {};
-            let d = this.$isBool(arguments[0]) && arguments[0];
+            let d = this.$isBoolLike(arguments[0]) && arguments[0],
+            t = this.$map(a[0], this.$isBaseObj);
             for (let i = 1, l = a.length; i < l; i++)
                 for (let k in a[i]) {
                     if (!this.$hasProp(k, a[i]) || a[i][k] == null) continue;
-                    d && this.$isBaseObj(a[0][k]) && this.$isBaseObj(a[i][k])
-                        ? this.$extend(d, a[0][k], a[i][k]) : (a[0][k] = a[i][k]);
+                    d && t[k] && this.$isBaseObj(a[i][k]) ? this.$extend(d, a[0][k], a[i][k]) : (a[0][k] = a[i][k]);
                 }
             return a[0];
         },
         $fn(fn, o) { if (this.$isFunc(fn)) return fn.bind(o || this); },
         $afn(fn, a, o) {
-            if (a == null) return this.$fn(fn, o);
             if (!this.$isFunc(fn)) return;
-            a = !this.$isArr(a) ? [a] : a.slice();
-            a.unshift(o || this);
-            return fn.bind.apply(fn, a);
+            a = this.$isArrLike(a) ? this.$toArr(a) : (a != null ? [a] : a);
+            return a && a.unshift(o || this) ? fn.bind.apply(fn, a) : fn.bind(o || this);
         },
         $call(fn, a, o) {
+            if (!this.$isFunc(fn)) return;
             a = a == null || this.$isArrLike(a) ? a : [a];
             o = o || this;
             let l = a != null && a.length;
-            if (!l) return fn.call(o);
-            if (l < 2) return fn.call(o, a[0]);
-            if (l < 3) return fn.call(o, a[0], a[1]);
-            if (l < 4) return fn.call(o, a[0], a[1], a[2]);
-            return fn.apply(o, a);
+            return !l ? fn.call(o) : (l < 2 ? fn.call(o, a[0]) : (l < 3 ? fn.call(o, a[0], a[1])
+                : (l < 4 ? fn.call(o, a[0], a[1], a[2]) : fn.apply(o, a))));
         },
-        $try(fn, a, o) {
-            try { return this.$call(fn, a, o); } catch(e) { console.error(e.message, e.stack); }
-        },
+        $try(fn, a, o) { try { return this.$call(fn, a, o); } catch(e) { console.error(e.message, e.stack); } },
         $xtry(fn, a, o) { return this.$afn(this.$try, [fn, a, o]); },
         $timeout(fn, tm, a, o) {
-            return (tm != null && setTimeout(this.$afn(fn, a, o), tm)) || (fn && clearTimeout(fn)) || this;
+            return tm != null ? setTimeout(this.$afn(fn, a, o), tm) : ((fn && clearTimeout(fn)) || this);
         },
         $proxy(fn, tm) {
-            fn = this.$fn(fn);
             return {
-                _fn(a, d) {
-                    this.cancel();
-                    let f = function() { a.length ? fn.apply(null, a) : fn(); };
-                    this._r = d ? setTimeout(f, tm) : f();
-                },
+                _fn(a, d) { this.cancel() || (d ? (this._r = LU.$timeout(fn, tm, a)) : LU.$call(fn, a)); },
                 call() { this._fn(arguments); },
                 delay() { this._fn(arguments, 1); },
-                cancel() { if (this._r) this._r = clearTimeout(this._r); },
+                cancel() { LU.$timeout(this._r); delete this._r; },
             };
         },
         $def(v, o) { return this.$ext(v, o, 0); },
@@ -145,25 +134,25 @@
             if (s || (e && o[k] == null)) Object.defineProperty(o, k, s ? {value: v} : {get() { return this['_' + k]; }});
             return this;
         },
-        $hasElem(id) { return !!document.getElementById(id); },
-        $makeElem(tag, opt) {
-            let $el = document.createElement(tag);
-            if (opt) for (let k in opt) { if (this.$hasProp(k, opt)) $el[k] = opt[k]; }
-            return $el;
+        $hasElem(k) { return !!document.getElementById(k); },
+        $makeElem(t, o) {
+            t = document.createElement(t);
+            if (o) for (let k in o) { if (this.$hasProp(k, o)) t[k] = o[k]; }
+            return t;
         },
-        $loadJs(src, opt) {
-            opt = this.$assign(opt || {}, {src, type: 'text/javascript', 'async': true});
-            document.getElementsByTagName('body')[0].appendChild(this.$makeElem('script', opt));
+        $loadJs(s, o) {
+            o = this.$assign(o || {}, {src: s, type: 'text/javascript', 'async': true});
+            document.getElementsByTagName('body')[0].appendChild(this.$makeElem('script', o));
             return this;
         },
-        $loadCss(href, opt) {
-            opt = this.$assign(opt || {}, {href, type: 'text/css', rel: 'stylesheet', 'async': true});
-            document.getElementsByTagName('head')[0].appendChild(this.$makeElem('link', opt));
+        $loadCss(h, o) {
+            o = this.$assign(o || {}, {href: h, type: 'text/css', rel: 'stylesheet', 'async': true});
+            document.getElementsByTagName('head')[0].appendChild(this.$makeElem('link', o));
             return this;
         },
-        $load(css, opt) {
-            opt = this.$assign(opt || {}, {innerHTML: css, type: 'text/css'});
-            document.getElementsByTagName('head')[0].appendChild(this.$makeElem('style', opt));
+        $load(c, o) {
+            o = this.$assign(o || {}, {innerHTML: c, type: 'text/css'});
+            document.getElementsByTagName('head')[0].appendChild(this.$makeElem('style', o));
             return this;
         }
     };
@@ -235,8 +224,8 @@
                 headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
                 success: this.$fn(s),
                 error: this.$fn(function(r, t) {
-                    r = (this.$isStrVal(r) && __(r)) || (this.$isStrVal(t) && __(t))
-                        || __('The ajax request sent raised an error.');
+                    r = this.$isStrVal(r) ? __(r) : (this.$isStrVal(t) ? __(t)
+                        : __('The ajax request sent raised an error.'));
                     (f = this.$fn(f)) ? f({message: r}) : this._error(r);
                 })
             }, o);
@@ -251,29 +240,29 @@
         }
         get_method(v) { return this._ns + v; }
         request(m, a, s, f) {
+            s = this.$fn(s);
+            f = this.$fn(f);
             let d = {
                 method: m.includes('.') ? m : this.get_method(m),
                 callback: this.$fn(function(r) {
                     r = (this.$isBaseObj(r) && r.message) || r;
-                    if (!this.$isBaseObj(r) || !r.error) return (s = this.$fn(s)) && s(r);
-                    let x = this.$isArrVal(r.list);
-                    if (x) r = this.$map(r.list, function(v) { return __(v); });
-                    else r = this.$isBaseObj(r) && ((this.$isStrVal(r.message) && __(r.message))
-                        || (this.$isStrVal(r.error) && __(r.error)))
-                        || __('The request sent returned an invalid response.');
-                    (f = this.$fn(f)) ? f({message: x ? r.join('\n') : r, self: true}) : this._error(r);
+                    if (!this.$isBaseObj(r) || !r.error) return s && s(r);
+                    if (!this.$isBaseObj(r)) r = {};
+                    r = (this.$isArrVal(r.list) ? this.$map(r.list, function(v) { return __(v); }).join('\n')
+                        : (this.$isStrVal(r.message) ? __(r.message)
+                        : (this.$isStrVal(r.error) ? __(r.error) : '')));
+                    if (!r.trim().length) r = __('The request sent returned an invalid response.');
+                    f ? f({message: r, self: 1}) : this._error(r);
                 }),
                 error: this.$fn(function(r, t) {
-                    r = (this.$isStrVal(r) && __(r)) || (this.$isStrVal(t) && __(t))
-                        || __('The request sent raised an error.');
-                    (f = this.$fn(f)) ? f({message: r}) : this._error(r);
+                    r = this.$isStrVal(r) ? __(r) : (this.$isStrVal(t) ? __(t) : __('The request sent raised an error.'));
+                    f ? f({message: r}) : this._error(r);
                 })
             };
-            if (!this.$isBaseObj(a)) a = {};
-            this.call('on_request', a);
-            !this.$isEmptyObj(a) && this.$assign(d, {type: 'POST', args: a});
+            this.$isBaseObj(a) && this.call('on_request', a);
+            this.$isBaseObjVal(a) && this.$assign(d, {type: 'POST', args: a});
             try { frappe.call(d); } catch(e) {
-                (f = this.$fn(f)) ? f(e) : this._error(e.message);
+                f ? f(e) : this._error(e.message);
                 if (this._err) throw e;
             } finally { this._err = 0; }
             return this;
@@ -288,25 +277,25 @@
             if (e == null) return this._off();
             if (this.$isBoolLike(e)) return this._off(0, 1);
             fn = this.$isFunc(fn) && fn;
-            e = e.split(' ');
+            e = e.trim().split(' ');
             for (let i = 0, l = e.length, ev; i < l; i++)
                 (ev = (rl ? this._real : '') + e[i]) && this._events.list[ev] && this._off(ev, fn);
             return this;
         }
         emit(e) {
-            e = e.split(' ');
+            e = e.trim().split(' ');
             for (let a = this.$toArr(arguments, 1), p = Promise.resolve(), i = 0, l = e.length; i < l; i++)
                 this._events.list[e[i]] && this._emit(e[i], a, p);
             return this;
         }
         call(e) {
-            e = e.split(' ');
+            e = e.trim().split(' ');
             for (let a = this.$toArr(arguments, 1), i = 0, l = e.length; i < l; i++)
                 this._events.list[e[i]] && this._emit(e[i], a);
             return this;
         }
         _on(ev, fn, o, s, r) {
-            ev = ev.split(' ');
+            ev = ev.trim().split(' ');
             fn = this.$fn(fn);
             let rd;
             for (let es = this._events, i = 0, l = ev.length, e; i < l; i++) {
@@ -359,30 +348,24 @@
             this._reg(o, 'on');
             this.get(o);
         },
-        off(o) { this._reg(o, 'off') && (o._router.obj = o._router.old = null); },
+        off(o) { this._reg(o, 'off'); o._router.obj = o._router.old = null; },
         get(o) {
             let d = ['app'], v;
             try { v = !o._router.old ? frappe.get_route() : (o._router.obj ? o._router.obj.parse() : null); } catch(_) {}
-            if (!LU.$isArrVal(v)) v = d;
-            else {
-                v = LU.$map(v, function(z) { return cstr(z); });
-                v = LU.$filter(v, function(z, i) { return z.length && z !== '#'; });
-                if (v.length) v[0] = cstr(v[0]).toLowerCase();
-            }
+            v = LU.$isArrVal(v) ? LU.$filter(LU.$map(v, function(z) { return (z = cstr(z).trim()).length && !/(\#|\?|\&)$/.test(z) ? z : null; })) : d;
+            if (v.length) v[0] = v[0].toLowerCase();
             let r = 0;
-            for (let i = 0, l = v.length; i < l; i++) {
+            for (let i = 0, l = v.length; i < l; i++)
                 if ((!o._router.val || o._router.val.indexOf(v[i]) !== i) && ++r) break;
-            }
             if (r) o._router.val = v;
             return r > 0;
         },
         _reg(o, a) {
-            if (!o._router.obj || !LU.$isFunc(o._router.obj[a])) return;
-            o._router.obj[a]('change', o._win.e.change);
+            o._router.obj && LU.$isFunc(o._router.obj[a]) && o._router.obj[a]('change', o._win.e.change);
         },
     },
     LUF = {
-        has_flow(f) { try { return f && !f.is_new() && f.states && f.states.get_state(); } catch(_) {} },
+        has_flow(f) { try { return f && !f.is_new() && f.states && !!f.states.get_state(); } catch(_) {} },
         is_field(f) { return f && f.df && !/^((Tab|Section|Column) Break|Table)$/.test(f.df.fieldtype); },
         is_table(f) { return f && f.df && f.df.fieldtype === 'Table'; },
     },
@@ -857,9 +840,8 @@
             let v = this._get(k), t;
             if (v == null || (t = LU.$parseJson(v)) == null) return v;
             if (t.___ == null) return t;
-            if (t.e != null && t.e < (new Date()).getTime())
-                this.del(k) && (t = null);
-            return (t && t.___) || t;
+            t.e != null && t.e < (new Date()).getTime() && this.del(k) && (t = null);
+            return t ? t.___ : t;
         }
         pop(k) {
             let v = this.get(k);
