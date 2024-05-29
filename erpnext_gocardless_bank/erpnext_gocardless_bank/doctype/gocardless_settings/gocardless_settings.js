@@ -45,34 +45,35 @@ frappe.ui.form.on('Gocardless Settings', {
             frappe.gc().fatal(__('At least one valid company access data is required.'));
             return false;
         }
+        let table = __('Gocardless Access');
         for (let i = 0, l = frm.doc[tkey].length, v, k; i < l; i++) {
             v = frm.doc[tkey][i];
             k = 'company';
             if (!frappe.gc().$isStrVal(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('A valid company is required.'));
-                frappe.gc().fatal(__('A valid access company in row #{0} is required.', [i + 1]));
+                frappe.gc().fatal(__('{0} - #{1}: A valid company is required.', [table, i + 1]));
                 return false;
             }
             k = 'secret_id';
             if (!frappe.gc().$isStrVal(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('A valid secret id is required.'));
-                frappe.gc().fatal(__('A valid access secret id in row #{0} is required.', [i + 1]));
+                frappe.gc().fatal(__('{0} - #{1}: A valid secret id is required.', [table, i + 1]));
                 return false;
             }
             if (!frm._set.is_valid_secret_id(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('Secret id is invalid.'));
-                frappe.gc().fatal(__('Access secret id in row #{0} is invalid.', [i + 1]));
+                frappe.gc().fatal(__('{0} - #{1}: Secret id is invalid.', [table, i + 1]));
                 return false;
             }
             k = 'secret_key';
             if (!frappe.gc().$isStrVal(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('A valid secret key is required.'));
-                frappe.gc().fatal(__('A valid access secret key in row #{0} is required.', [i + 1]));
+                frappe.gc().fatal(__('{0} - #{1}: A valid secret key is required.', [table, i + 1]));
                 return false;
             }
             if (!frm._set.is_valid_secret_key(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('Secret key is invalid.'));
-                frappe.gc().fatal(__('Access secret key in row #{0} is invalid.', [i + 1]));
+                frappe.gc().fatal(__('{0} - #{1}: Secret key is invalid.', [table, i + 1]));
                 return false;
             }
         }

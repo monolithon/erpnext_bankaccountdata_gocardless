@@ -116,23 +116,24 @@ class GocardlessSettings(Document):
             is_valid_secret_key
         )
         
+        table = _("Gocardless Access")
         exist = companies_filter(
             [v.company for v in self.access if v.company],
             {"is_group": 0}
         )
         for i, v in enumerate(self.access):
             if not v.company:
-                self._error(_("A valid access company in row #{0} is required.").format(i))
+                self._error(_("{0} - #{1}: A valid company is required.").format(table, i + 1))
             if v.company not in exist:
-                self._error(_("Access company \"{0}\" in row #{1} is a group or doesn't exist.").format(v.company, i))
+                self._error(_("{0} - #{1}: Company \"{2}\" is a group or doesn't exist.").format(table, i + 1, v.company))
             if not v.secret_id:
-                self._error(_("A valid access secret id in row #{0} is required.").format(i))
+                self._error(_("{0} - #{1}: A valid secret id is required.").format(table, i + 1))
             if not is_valid_secret_id(v.secret_id):
-                self._error(_("Access secret id in row #{0} is invalid.").format(i))
+                self._error(_("{0} - #{1}: Secret id is invalid.").format(table, i + 1))
             if not v.secret_key:
-                self._error(_("A valid access secret key in row #{0} is required.").format(i))
+                self._error(_("{0} - #{1}: A valid secret key is required.").format(table, i + 1))
             if not is_valid_secret_key(v.secret_key):
-                self._error(_("Access secret key in row #{0} is invalid.").format(i))
+                self._error(_("{0} - #{1}: Secret key is invalid.").format(table, i + 1))
     
     
     def _error(self, msg):
