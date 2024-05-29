@@ -50,29 +50,29 @@ frappe.ui.form.on('Gocardless Settings', {
             k = 'company';
             if (!frappe.gc().$isStrVal(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('A valid company is required.'));
-                frappe.gc().fatal(__('A valid access company in row #{0} is required.', [i]));
+                frappe.gc().fatal(__('A valid access company in row #{0} is required.', [i + 1]));
                 return false;
             }
             k = 'secret_id';
             if (!frappe.gc().$isStrVal(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('A valid secret id is required.'));
-                frappe.gc().fatal(__('A valid access secret id in row #{0} is required.', [i]));
+                frappe.gc().fatal(__('A valid access secret id in row #{0} is required.', [i + 1]));
                 return false;
             }
             if (!frm._set.is_valid_secret_id(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('Secret id is invalid.'));
-                frappe.gc().fatal(__('Access secret id in row #{0} is invalid.', [i]));
+                frappe.gc().fatal(__('Access secret id in row #{0} is invalid.', [i + 1]));
                 return false;
             }
             k = 'secret_key';
             if (!frappe.gc().$isStrVal(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('A valid secret key is required.'));
-                frappe.gc().fatal(__('A valid access secret key in row #{0} is required.', [i]));
+                frappe.gc().fatal(__('A valid access secret key in row #{0} is required.', [i + 1]));
                 return false;
             }
             if (!frm._set.is_valid_secret_key(v[k])) {
                 frappe.gc().rfield_status(frm, tkey, v.name, k, __('Secret key is invalid.'));
-                frappe.gc().fatal(__('Access secret key in row #{0} is invalid.', [i]));
+                frappe.gc().fatal(__('Access secret key in row #{0} is invalid.', [i + 1]));
                 return false;
             }
         }
@@ -80,7 +80,7 @@ frappe.ui.form.on('Gocardless Settings', {
     setup_table: function(frm) {
         let tkey = 'access';
         if (!frappe.gc().$isArrVal(frm.doc[tkey])) return;
-        for (let i = 0, l = frm.doc[tkey].length, v, f; i < l; i++) {
+        for (let i = 0, l = frm.doc[tkey].length, v; i < l; i++) {
             v = frm.doc[tkey][i];
             frm._set.table.add(cstr(v.name), cstr(v.company));
         }
@@ -88,7 +88,7 @@ frappe.ui.form.on('Gocardless Settings', {
     destroy_table: function(frm) {
         let tkey = 'access';
         if (!frappe.gc().$isArrVal(frm.doc[tkey])) return;
-        for (let i = 0, l = frm.doc[tkey].length, v, f; i < l; i++) {
+        for (let i = 0, l = frm.doc[tkey].length, v; i < l; i++) {
             v = cstr(frm.doc[tkey][i].name);
             frappe._gc_access.destroy(frm, v);
         }
@@ -112,7 +112,10 @@ frappe.ui.form.on('Gocardless Access', {
         err;
         if (!val.length) {
             err = __('A valid company is required.');
-        } else if (frm._set.table.has(val, 1)) {
+        } else if (
+            frm._set.table.has(val, 1)
+            && frm._set.table.val(val, 1) !== cdn
+        ) {
             err = __('Access for company "{0}" already exist.', [val]);
             val = '';
             frm._set.ignore++;
