@@ -486,6 +486,7 @@ frappe.gc_accounts = {
                 ].join('\n');
                 this._$body.append('<tr data-gc-account="' + r.account + '">' + h + '</tr>');
             }
+            this._init_popover();
             this.refresh();
         }
         this._switch('table');
@@ -541,7 +542,7 @@ frappe.gc_accounts = {
         let html = frappe.gc().$filter(frappe.gc().$map(list, function(v) {
             if (!cint(v.reqd)) return null;
             return format_currency(v.amount, v.currency);
-        })).join(' - ')';
+        })).join(' - ');
         return '<td>' + html + '</td>';
     },
     _render_status(row) {
@@ -571,7 +572,7 @@ frappe.gc_accounts = {
         );
         return '<td><div class="btn-group btn-group-sm">' + actions.join('') + '</div></td>';
     },
-    _on_balance(e) {
+    _init_popover(e) {
         this._$body.find('.gc-balance').popover({
             trigger: 'click',
             placement: 'top',
