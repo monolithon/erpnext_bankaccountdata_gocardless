@@ -31,9 +31,11 @@ def store_bank_account(name, account):
         })
         return 0
     
+    row = None
     data = None
     for v in doc.bank_accounts:
-        if v.account == account and not v.get("bank_account", ""):
+        if v.account == account and not v.get("bank_account_ref", ""):
+            row = v
             data = {
                 "account": v.account,
                 "account_id": v.account_id,
@@ -52,13 +54,51 @@ def store_bank_account(name, account):
         return 0
     
     if not frappe.db.exists("Bank Account", {
-        "bank": doc.bank,
+        "bank": doc.bank_ref,
         "company": doc.company,
         "is_default": 1
     }):
         data["is_default"] = 1
     
-    return add_bank_account(doc.name, doc.company, doc.bank, data)
+    update = 0
+    if data["account_type"]:
+        from .bank_account_type import add_account_type
+        
+        account_type = add_account_type(data["account_type"])
+        if not account_type:
+            _emit_error({
+                "name": name,
+                "error": _("ERPNext: Unable to create bank account type \"{0}\" for bank account \"{1}\".").format(data["account_type"], data["account"])
+            })
+            return 0
+        
+        if not row.bank_account_type_ref:
+            update = 1
+            row.bank_account_type_ref = account_type
+            data["account_type"] = account_type
+    
+    from .currency import get_currency_status
+    
+    currency_status = get_currency_status(data["account_currency"])
+    if currency_status is None:
+        from .currency import enqueue_add_currencies
+        
+        enqueue_add_currencies([data["account_currency"]])
+    elif not currency_status:
+        from .currency import enqueue_enable_currencies
+        
+        enqueue_enable_currencies([data["account_currency"]])
+    
+    bank_account = add_bank_account(doc.name, doc.company, doc.bank, data)
+    if bank_account and not row.bank_account_ref:
+        row.bank_account_ref = bank_account
+        update = 1
+    
+    if update:
+        doc.flags.update_bank_accounts = 1
+        doc.save(ignore_permissions=True)
+    
+    return 1 if bank_account else 0
 
 
 # [G Bank Form]
@@ -87,7 +127,7 @@ def change_bank_account(name, account, bank_account):
     
     data = None
     for v in doc.bank_accounts:
-        if v.account == account and not v.get("bank_account", ""):
+        if v.account == account and not v.get("bank_account_ref", ""):
             data = v.account
             break
     
@@ -147,7 +187,7 @@ def get_bank_account_data(account):
         .on(pdoc.name == doc.parent)
         .where(doc.parenttype == pdt)
         .where(doc.parentfield == "bank_accounts")
-        .where(doc.bank_account == account)
+        .where(doc.bank_account_ref == account)
         .where(pdoc.disabled == 0)
         .limit(1)
     ).run(as_dict=True)
@@ -156,7 +196,7 @@ def get_bank_account_data(account):
     
     data = data.pop(0)
     ret = {
-        "bank_account": account,
+        "bank_account_ref": account,
         "status": data["status"]
     }
     if data["status"] == "Ready":
@@ -171,7 +211,7 @@ def get_bank_account_data(account):
 
 
 # [Bank]*
-def get_client_bank_accounts(company, bank, auth_id, publish=False):
+def get_client_bank_accounts(company, bank, auth_id):
     from .system import get_client
     
     client = get_client(company)
@@ -181,36 +221,24 @@ def get_client_bank_accounts(company, bank, auth_id, publish=False):
             "bank": bank,
             "data": client
         })
-        if publish:
-            _emit_error({"bank": bank, "error": client["error"]})
-        
         return 0
     
     accounts = client.get_accounts(auth_id)
     if "error" in accounts:
-        if publish:
-            _emit_error({
-                "bank": bank,
-                "error": _("Unable to get bank accounts list from api.")
-            })
-        
+        _store_error({
+            "error": "Unable to get bank accounts list from api.",
+            "bank": bank,
+            "data": accounts
+        })
         return 0
     
     data = []
-    for v in accounts:
+    for i in range(len(accounts)):
+        v = accounts.pop(0)
         va = client.get_account_data(v)
         if not va or "error" in va:
             _store_error({
                 "error": "Bank account data received is empty or invalid.",
-                "bank": bank,
-                "account": v
-            })
-            continue
-            
-        vb = client.get_account_balances(v)
-        if not vb or "error" in vb:
-            _store_error({
-                "error": "Bank account balances received is empty or invalid.",
                 "bank": bank,
                 "account": v
             })
@@ -225,65 +253,71 @@ def get_client_bank_accounts(company, bank, auth_id, publish=False):
             })
             continue
         
+        vb = client.get_account_balances(v)
+        if not vb or "error" in vb:
+            _store_error({
+                "error": "Bank account balances received is empty or invalid.",
+                "bank": bank,
+                "account": v
+            })
+            continue
+        
         from .common import to_json
         
-        v = {"id": v}
+        v = {"id": v, "balances": to_json(vb)}
         v.update(va)
-        v.update({"balances": to_json(vb)})
         v.update(vd)
         data.append(v)
     
     if data:
         data = prepare_bank_accounts(data, bank, company)
     
-    return data
+    return data if data else 0
 
 
 # [Internal]
 def prepare_bank_accounts(accounts, bank, company):
     from .system import settings
     from .company import get_company_currency
-    from .currency import get_currencies
+    from .currency import get_currencies_status
     
     doc = settings()
     currency = get_company_currency(company)
-    currencies = {
-        "list": get_currencies(),
-        "new": [],
-        "enable": [],
-    }
+    currencies = get_currencies_status()
+    skip = "Ignore"
     exist = []
     idx = 1
     result = []
     
-    for v in accounts:
+    for i in range(len(accounts)):
+        v = accounts.pop(0)
         if "name" not in v:
             v["name"] = f"{bank} Account"
         if "currency" not in v:
-            if not currency or doc.bank_account_without_currency == "Ignore":
+            if not currency or doc.bank_account_without_currency == skip:
                 continue
             v["currency"] = currency
-        if v["currency"] not in currencies["list"]:
-            if doc.bank_account_currency_doesnt_exist == "Ignore":
+        if v["currency"] not in currencies:
+            if doc.bank_account_currency_doesnt_exist == skip:
                 continue
-            currencies["new"].append(v["currency"])
-        elif not currencies["list"][v["currency"]]:
-            if doc.bank_account_currency_disabled == "Ignore":
+        elif not currencies[v["currency"]]:
+            if doc.bank_account_currency_disabled == skip:
                 continue
-            currencies["enable"].append(v["currency"])
         
-        ret = gen_account_name(v, exist, idx)
-        if not ret:
-            _store_error({
-                "error": "Unable to get bank account name.",
-                "bank": bank,
-                "company": company,
-                "data": v
-            })
-            continue
+        ret = make_account_name(v, exist, idx)
+        idx = ret[1]
+        if not ret[0]:
+            ret = make_account_name(v, exist, idx)
+            if not ret[0]:
+                _store_error({
+                    "error": "Unable to make unique bank account name.",
+                    "bank": bank,
+                    "company": company,
+                    "data": v
+                })
+                continue
         
         v["name"] = ret[0]
-        idx = ret[1]
         iban = v.get("iban", "")
         if iban and not is_valid_IBAN(iban):
             v["iban"] = ""
@@ -297,39 +331,30 @@ def prepare_bank_accounts(accounts, bank, company):
             "iban": v.get("iban", ""),
             "balances": v["balances"],
             "status": v["status"],
-            "bank_account": "",
+            "bank_account_ref": "",
+            "bank_account_type_ref": ""
         })
     
-    if currencies["new"]:
-        from .currency import enqueue_add_currencies
-        
-        enqueue_add_currencies(bank, currencies["new"])
-    
-    if currencies["enable"]:
-        from .currency import enqueue_enable_currencies
-        
-        enqueue_enable_currencies(bank, currencies["enable"])
-    
-    return result
+    return result if result else 0
 
 
 # [Internal]
-def gen_account_name(data: dict, exist: list, idx: int):
+def make_account_name(data: dict, exist: list, idx: int):
     name = [data["name"], str(data["currency"]).upper()]
     tmp = " - ".join(name)
     if tmp not in exist:
         exist.append(tmp)
         return [tmp, idx]
     
-    for i in range(idx, idx + 10):
-        name.append(idx)
+    for i in range(10):
+        name[2] = "#" + str(idx)
         idx += 1
         tmp = " - ".join(name)
         if tmp not in exist:
             exist.append(tmp)
             return [tmp, idx]
     
-    return None
+    return [None, idx]
 
 
 # [Bank]*
@@ -338,39 +363,33 @@ def store_bank_accounts(name, accounts):
     
     doc = get_cached_doc("Gocardless Bank", name)
     if not doc:
-        return []
+        return 0
     
-    existing = {v.account:v for v in doc.bank_accounts}
-    for v in accounts:
+    if doc.bank_accounts:
+        existing = {v.account:v for v in doc.bank_accounts}
+    else:
+        existing = {}
+    
+    for i in range(len(accounts)):
+        v = accounts.pop(0)
         if v["account"] not in existing:
             data = v
         else:
-            data = existing[v["account"]]
+            data = existing.pop(v["account"])
             doc.bank_accounts.remove(data)
-            data["status"] = v["status"]
+            for k in v:
+                if k != "account" and v[k] and v[k] != data.get(k, ""):
+                    data.set(k, v[k])
         
         doc.append("bank_accounts", data)
     
+    doc.flags.update_bank_accounts = 1
     doc.save(ignore_permissions=True)
-    
-    from .realtime import emit_reload_bank_accounts
-    
-    emit_reload_bank_accounts({"name": doc.name, "bank": doc.bank})
+    return 1
 
 
 # [Internal]
 def add_bank_account(name, company, bank, data):
-    if data["account_type"]:
-        from .bank_account_type import add_account_type
-        
-        ret = add_account_type(data["account_type"])
-        if not ret:
-            _emit_error({
-                "name": name,
-                "error": _("Unable to create bank account type \"{0}\" for bank account \"{1}\".").format(data["account_type"], data["account"])
-            })
-            return 0
-    
     err = None
     dt = "Bank Account"
     account_name = "{0} - {1}".format(data["account"], bank)
@@ -380,19 +399,21 @@ def add_bank_account(name, company, bank, data):
         "account_type": data["account_type"],
         "gocardless_bank_account_no": data["account_no"],
         "company": company,
-        "iban": data["iban"],
-        "is_default": data["is_default"],
-        "from_gocardless": 1
+        "iban": data["iban"]
     }
     if not frappe.db.exists(dt, account_name):
         try:
             (frappe.new_doc(dt)
                 .update(account)
+                .update({
+                    "is_default": data["is_default"],
+                    "from_gocardless": 1
+                })
                 .insert(ignore_permissions=True, ignore_mandatory=True))
         except frappe.UniqueValidationError:
-            err = _("Bank account \"{0}\" already exists.").format(data["account"])
+            err = _("ERPNext: Bank account \"{0}\" of bank \"{1}\" already exists.").format(data["account"], bank)
         except Exception as exc:
-            err = _("Unable to create bank account \"{0}\" of Gocardless bank \"{1}\".").format(data["account"], bank)
+            err = _("ERPNext: Unable to create bank account \"{0}\" of bank \"{1}\".").format(data["account"], bank)
             _store_error({
                 "error": "Unable to create bank account.",
                 "gc_bank": name,
@@ -408,7 +429,7 @@ def add_bank_account(name, company, bank, data):
                 .update(account)
                 .save(ignore_permissions=True))
         except Exception as exc:
-            err = _("Unable to update bank account \"{0}\" of Gocardless bank \"{1}\".").format(data["account"], bank)
+            err = _("ERPNext: Unable to update bank account \"{0}\" of bank \"{1}\".").format(data["account"], bank)
             _store_error({
                 "error": "Unable to create bank account.",
                 "gc_bank": name,
@@ -424,16 +445,16 @@ def add_bank_account(name, company, bank, data):
         clear_doc_cache(dt)
         ret = update_bank_account(name, account_name, data["account"])
         if not ret:
-            err = _("Unable to update Gocardless bank account \"{0}\" of Gocardless bank \"{1}\".").format(data["account"], bank)
+            err = _("Unable to update bank account \"{0}\" of bank \"{1}\".").format(data["account"], bank)
     
     if err:
         from .common import log_error
         
         log_error(err)
         _emit_error({"name": name, "error": err})
-        return 0
+        return None
     
-    return 1
+    return account_name
 
 
 # [Internal]
@@ -468,8 +489,8 @@ def update_bank_account(name, bank_account, account):
             return 0
     
     for v in doc.bank_accounts:
-        if v.account == account and not v.get("bank_account", ""):
-            v.update({"bank_account": bank_account})
+        if v.account == account:
+            v.update({"bank_account_ref": bank_account})
             doc.save(ignore_permissions=True)
             return 1
     

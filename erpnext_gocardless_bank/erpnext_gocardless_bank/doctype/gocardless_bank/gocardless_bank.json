@@ -26,6 +26,7 @@
   "bank_accounts_html",
   "auth_id",
   "auth_expiry",
+  "bank_ref",
   "bank_accounts"
  ],
  "fields": [
@@ -172,6 +173,17 @@
    "in_list_view": 1
   },
   {
+   "fieldname": "bank_ref",
+   "fieldtype": "Link",
+   "label": "Bank Ref.",
+   "options": "Bank",
+   "read_only": 1,
+   "hidden": 1,
+   "print_hide": 1,
+   "report_hide": 1,
+   "ignore_user_permissions": 1
+  },
+  {
    "fieldname": "bank_accounts",
    "fieldtype": "Table",
    "label": "Bank Accounts",
@@ -180,7 +192,7 @@
   }
  ],
  "icon": "fa fa-bank",
- "modified": "2024-05-27 04:04:04",
+ "modified": "2024-05-31 04:04:04",
  "modified_by": "Administrator",
  "module": "ERPNext Gocardless Bank",
  "name": "Gocardless Bank",

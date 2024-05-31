@@ -40,11 +40,9 @@ def search_companies(doctype, txt, searchfield, start, page_len, filters, as_dic
         filter_search,
         prepare_data
     )
-    from .system import settings
+    from .system import get_access_companies
     
-    doc = settings()
-    companies = [v.company for v in doc.access]
-    
+    companies = get_access_companies()
     dt = "Company"
     doc = frappe.qb.DocType(dt)
     qry = (

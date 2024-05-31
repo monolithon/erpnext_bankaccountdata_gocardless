@@ -16,8 +16,9 @@
   "account_no",
   "iban",
   "balances",
-  "bank_account",
-  "last_sync"
+  "last_sync",
+  "bank_account_ref",
+  "bank_account_type_ref"
  ],
  "fields": [
   {
@@ -83,22 +84,37 @@
    "hidden": 1
   },
   {
-   "fieldname": "bank_account",
-   "fieldtype": "Data",
-   "label": "Bank Account",
-   "default": "",
-   "hidden": 1
-  },
-  {
    "fieldname": "last_sync",
    "fieldtype": "Datetime",
    "label": "Last Sync",
    "default": "",
    "hidden": 1
+  },
+  {
+   "fieldname": "bank_account_ref",
+   "fieldtype": "Link",
+   "label": "Bank Account Ref.",
+   "options": "Bank Account",
+   "read_only": 1,
+   "hidden": 1,
+   "print_hide": 1,
+   "report_hide": 1,
+   "ignore_user_permissions": 1
+  },
+  {
+   "fieldname": "bank_account_type_ref",
+   "fieldtype": "Link",
+   "label": "Bank Account Type Ref.",
+   "options": "Bank Account Type",
+   "read_only": 1,
+   "hidden": 1,
+   "print_hide": 1,
+   "report_hide": 1,
+   "ignore_user_permissions": 1
   }
  ],
  "istable": 1,
- "modified": "2024-05-12 04:04:04",
+ "modified": "2024-05-31 04:04:04",
  "modified_by": "Administrator",
  "module": "ERPNext Gocardless Bank",
  "name": "Gocardless Bank Account",

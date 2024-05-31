@@ -56,6 +56,8 @@ def error(text: str, title: str | None=None):
 
 # [Gocardless]
 def parse_json(data, default=None):
+    if data is None:
+        return default
     if not isinstance(data, str):
         return data
     try:
@@ -66,6 +68,8 @@ def parse_json(data, default=None):
 
 # [Api, Bank Transaction, Gocardless, Schedule, Internal]
 def to_json(data, default=None, pretty=False):
+    if data is None:
+        return default
     if isinstance(data, str):
         return data
     try:
@@ -79,6 +83,8 @@ def to_json(data, default=None, pretty=False):
 
 # [Internal]
 def to_str(data, default=None):
+    if data is None:
+        return default
     if isinstance(data, str):
         return data
     try:
@@ -95,3 +101,13 @@ def get_str(data, default=None):
     if val is None:
         return default
     return val
+
+
+# [Bank Transaction]
+def unique_key(data=None):
+    import hashlib
+    import uuid
+    
+    return uuid.UUID(hashlib.sha256(
+        to_json(data, "").encode("utf-8")
+    ).hexdigest()[::2])

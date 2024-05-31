@@ -201,8 +201,7 @@ def queue_bank_transactions_sync(
     
     job_id = f"gocardless-bank-transactions-sync-{account}"
     if not is_job_running(job_id):
-        import uuid
-        
+        from .common import unique_key
         from .background import enqueue_job
         
         enqueue_job(
@@ -212,7 +211,7 @@ def queue_bank_transactions_sync(
             timeout=10000 * dt_diff,
             settings=settings,
             client=client,
-            sync_id=uuid.uuid4(),
+            sync_id=unique_key(),
             bank=bank,
             account_bank=account_bank,
             trigger=trigger,
@@ -330,7 +329,9 @@ def new_bank_transaction(
             })
             return 0
         else:
-            data["transaction_id"] = make_transaction_id(data)
+            from .common import unique_key
+            
+            data["transaction_id"] = unique_key(data)
     
     if "date" not in data:
         if settings.bank_transaction_without_date == "Ignore":
@@ -464,18 +465,6 @@ def new_bank_transaction(
                 "data": data,
                 "exception": str(exc)
             })
-
-
-# [Internal]
-def make_transaction_id(data):
-    import hashlib
-    import uuid
-    
-    from .common import to_json
-    
-    return uuid.UUID(hashlib.sha256(
-        to_json(data, "").encode("utf-8")
-    ).hexdigest()[::2])
 
 
 # [Internal]

@@ -14,10 +14,6 @@ from frappe.utils import (
 )
 
 from .api import Api
-from .common import (
-    log_error,
-    parse_json
-)
 
 
 class Gocardless:
@@ -31,7 +27,7 @@ class Gocardless:
             not secret_id or not isinstance(secret_id, str) or
             not secret_key or not isinstance(secret_key, str)
         ):
-            log_error(_("Gocardless secret id or key is invalid."))
+            self._log_error(_("Gocardless secret id or key is invalid."))
             return None
         
         data = self._send(
@@ -56,7 +52,7 @@ class Gocardless:
             not isinstance(data["refresh_expires"], (str, int))
         ):
             self._store_error({"error": "Invalid token received.", "data": data})
-            log_error(_("Gocardless token received is invalid."))
+            self._log_error(_("Gocardless token received is invalid."))
             return None
         
         self.access = data["access"]
@@ -65,7 +61,7 @@ class Gocardless:
     
     def set_access(self, token: str):
         if not token or not isinstance(token, str):
-            log_error(_("Gocardless access token is invalid."))
+            self._log_error(_("Gocardless access token is invalid."))
         
         self.access = token
     
@@ -76,7 +72,7 @@ class Gocardless:
     
     def refresh(self, token: str):
         if not token or not isinstance(token, str):
-            log_error(_("Gocardless refresh token is invalid."))
+            self._log_error(_("Gocardless refresh token is invalid."))
             return None
         
         data = self._send(
@@ -94,7 +90,7 @@ class Gocardless:
             not isinstance(data["access_expires"], (str, int))
         ):
             self._store_error({"error": "Invalid refreshed token received.", "data": data})
-            log_error(_("Gocardless refreshed access token received is invalid."))
+            self._log_error(_("Gocardless refreshed access token received is invalid."))
             return None
         
         self.access = data["access"]
@@ -108,7 +104,7 @@ class Gocardless:
         
         if not data:
             self._store_error({"error": "Emply banks list received.", "data": data})
-            log_error(_("Gocardless banks list received is empty."))
+            self._log_error(_("Gocardless banks list received is empty."))
             return None
         
         for v in data:
@@ -120,7 +116,7 @@ class Gocardless:
                 not isinstance(v["name"], str)
             ):
                 self._store_error({"error": "Invalid banks list received.", "data": data})
-                log_error(_("Gocardless banks list received is invalid."))
+                self._log_error(_("Gocardless banks list received is invalid."))
                 return None
         
         for v in data:
@@ -152,7 +148,7 @@ class Gocardless:
             not isinstance(data["institution_id"], str)
         ):
             self._store_error({"error": "Invalid bank agreement data received.", "data": data})
-            log_error(_("Gocardless bank agreement data received for bank id ({0}) is invalid.").format(bank_id))
+            self._log_error(_("Gocardless bank agreement data received for bank id ({0}) is invalid.").format(bank_id))
             return None
         
         if "access_valid_for_days" not in data:
@@ -204,7 +200,7 @@ class Gocardless:
             not isinstance(data["link"], str)
         ):
             self._store_error({"error": "Invalid bank link data received.", "data": data})
-            log_error(_("Gocardless bank link data received for bank id ({0}) is invalid.").format(bank_id))
+            self._log_error(_("Gocardless bank link data received for bank id ({0}) is invalid.").format(bank_id))
             return None
         
         data["access_valid_for_days"] = agree["access_valid_for_days"]
@@ -226,21 +222,18 @@ class Gocardless:
         
         if "accounts" not in data:
             self._store_error({"error": "Invalid bank accounts list received.", "data": data})
-            log_error(_("Gocardless bank accounts list received is invalid."))
+            self._log_error(_("Gocardless bank accounts list received is invalid."))
             return []
         
-        accounts = data["accounts"]
-        if isinstance(accounts, str):
-            accounts = parse_json(accounts)
-        
+        accounts = self._parse_json(data["accounts"])
         if not isinstance(accounts, list):
             self._store_error({"error": "Invalid bank accounts list received.", "data": data})
-            log_error(_("Gocardless bank accounts list received is invalid."))
+            self._log_error(_("Gocardless bank accounts list received is invalid."))
             accounts = []
         
         elif not accounts:
             self._store_error({"error": "Empty bank accounts list received.", "data": data})
-            log_error(_("Gocardless bank accounts list received is empty."))
+            self._log_error(_("Gocardless bank accounts list received is empty."))
         
         return accounts
     
@@ -255,7 +248,7 @@ class Gocardless:
             not isinstance(data["id"], str)
         ):
             self._store_error({"error": "Invalid bank account data received.", "account_id": account_id, "data": data})
-            log_error(_("Gocardless bank account data received for bank account id ({0}) is invalid.").format(account_id))
+            self._log_error(_("Gocardless bank account data received for bank account id ({0}) is invalid.").format(account_id))
             return None
         
         status = "Ready"
@@ -293,44 +286,61 @@ class Gocardless:
         balances = []
         if "balances" not in data:
             self._store_error({"error": "Invalid bank account balances received.", "account_id": account_id, "data": data})
-            log_error(_("Gocardless bank account balances received for bank account id ({0}) is invalid.").format(account_id))
+            self._log_error(_("Gocardless bank account balances received for bank account id ({0}) is invalid.").format(account_id))
             return balances
         
-        balances_data = data["balances"]
-        if isinstance(balances_data, str):
-            balances_data = parse_json(balances_data)
-        
+        balances_data = self._parse_json(data["balances"])
         if not isinstance(balances_data, list):
             self._store_error({"error": "Invalid bank account balances received.", "account_id": account_id, "data": data})
-            log_error(_("Gocardless bank account balances received for bank account id ({0}) is invalid.").format(account_id))
+            self._log_error(_("Gocardless bank account balances received for bank account id ({0}) is invalid.").format(account_id))
             return balances
         
         if not balances_data:
             self._store_error({"error": "Empty bank account balances received.", "account_id": account_id, "data": data})
-            log_error(_("Gocardless bank account balances received for bank account id ({0}) is empty.").format(account_id))
+            self._log_error(_("Gocardless bank account balances received for bank account id ({0}) is empty.").format(account_id))
             return balances
         
         for v in balances_data:
             if (
                 not isinstance(v, dict) or
-                "balanceAmount" not in v or
+                not v.get("balanceAmount", "") or
                 not isinstance(v["balanceAmount"], dict) or
                 "amount" not in v["balanceAmount"] or
-                "currency" not in v["balanceAmount"]
+                "currency" not in v["balanceAmount"] or
+                not v.get("balanceType", "")
             ):
                 self._store_error({"error": "Invalid bank account balances list received.", "account_id": account_id, "data": data})
-                log_error(_("Gocardless bank account balances list received for bank account id ({0}) is invalid.").format(account_id))
+                self._log_error(_("Gocardless bank account balances list received for bank account id ({0}) is invalid.").format(account_id))
                 if balances:
                     balances.clear()
                 break
             
+            balance_type = Api.account_balance_types.get(v["balanceType"], "")
+            if not balance_type:
+                balance_type = v["balanceType"]
+                self._store_info({"info": "Balance type not recorded.", "data": v})
+            
             balances.append({
+                "type": balance_type,
                 "amount": v["balanceAmount"]["amount"],
                 "currency": v["balanceAmount"]["currency"],
-                "type": v.get("balanceType", ""),
-                "date": v.get("referenceDate", "")
+                "inc_limit": v.get("creditLimitIncluded", ""),
+                "last_change": v.get("lastChangeDateTime", ""),
+                "date": v.get("referenceDate", ""),
+                "reqd": 1 if balance_type in Api.reqd_account_balance_types else 0
             })
         
+        types_vals = list(Api.account_balance_types.values())
+        def data_sorter(val):
+            nonlocal types_vals
+            
+            if val["type"] not in types_vals:
+                idx = 100
+            else:
+                idx = types_vals.index(val["type"])
+            return idx
+        
+        balances = sorted(balances, key=data_sorter)
         return balances
     
     
@@ -341,21 +351,18 @@ class Gocardless:
         
         if "account" not in data:
             self._store_error({"error": "Invalid bank account details received.", "account_id": account_id, "data": data})
-            log_error(_("Gocardless bank account details received for bank account id ({0}) is invalid.").format(account_id))
+            self._log_error(_("Gocardless bank account details received for bank account id ({0}) is invalid.").format(account_id))
             return {}
         
-        details = data["account"]
-        if isinstance(details, str):
-            details = parse_json(details)
-        
+        details = self._parse_json(data["account"])
         if not isinstance(details, dict):
             self._store_error({"error": "Invalid bank account details received.", "account_id": account_id, "data": data})
-            log_error(_("Gocardless bank account details received for bank account id ({0}) is invalid.").format(account_id))
+            self._log_error(_("Gocardless bank account details received for bank account id ({0}) is invalid.").format(account_id))
             details = {}
         
         elif not details:
             self._store_error({"error": "Empty bank account details received.", "account_id": account_id, "data": data})
-            log_error(_("Gocardless bank account details received for bank account id ({0}) is empty.").format(account_id))
+            self._log_error(_("Gocardless bank account details received for bank account id ({0}) is empty.").format(account_id))
         
         return details
     
@@ -370,19 +377,16 @@ class Gocardless:
                 "error": "Invalid bank account transactions received.", "account_id": account_id,
                 "date": [date_from, date_to], "data": data
             })
-            log_error(_("Gocardless bank account transactions received for bank account id ({0}) is invalid.").format(account_id))
+            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) is invalid.").format(account_id))
             return None
         
-        data = data["transactions"]
-        if isinstance(data, str):
-            data = parse_json(data)
-        
+        data = self._parse_json(data["transactions"])
         if not isinstance(data, dict):
             self._store_error({
                 "error": "Invalid bank account transactions received.", "account_id": account_id,
                 "date": [date_from, date_to], "data": data
             })
-            log_error(_("Gocardless bank account transactions received for bank account id ({0}) is invalid.").format(account_id))
+            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) is invalid.").format(account_id))
             return None
         
         if not data:
@@ -390,7 +394,7 @@ class Gocardless:
                 "error": "Empty bank account transactions received.", "account_id": account_id,
                 "date": [date_from, date_to], "data": data
             })
-            log_error(_("Gocardless bank account transactions received for bank account id ({0}) is empty.").format(account_id))
+            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) is empty.").format(account_id))
             return None
         
         if not data.get("booked", "") and not data.get("pending", ""):
@@ -398,13 +402,14 @@ class Gocardless:
                 "error": "No booked and pending bank account transactions received.", "account_id": account_id,
                 "date": [date_from, date_to], "data": data
             })
-            log_error(_("Gocardless bank account transactions received for bank account id ({0}) has no booked and pending data.").format(account_id))
+            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) has no booked and pending data.").format(account_id))
             return None
         
         return data
     
     
-    def prepare_entries(self, data: list|dict):
+    @staticmethod
+    def prepare_entries(data: list|dict):
         return Api.prepare_transactions(data)
     
     
@@ -424,7 +429,7 @@ class Gocardless:
         
         if auth or is_post:
             if auth and not self.access:
-                log_error(_("Gocardless access token is missing."))
+                self._log_error(_("Gocardless access token is missing."))
                 return None
             
             headers = headers.copy()
@@ -446,10 +451,10 @@ class Gocardless:
                 "method": method,
                 "data": data
             })
-            log_error(_("Gocardless request failed. {0}").format(str(exc)))
+            self._log_error(_("Gocardless request failed. {0}").format(str(exc)))
             return None
         
-        response = parse_json(response)
+        response = self._parse_json(response)
         if status not in Api.valid_status_codes:
             err = Api.parse_error(response)
             self._store_error(err.copy().update({"data": response}))
@@ -470,7 +475,7 @@ class Gocardless:
                 "data": data,
                 "response": response
             })
-            log_error(_("Gocardless response received is invalid."))
+            self._log_error(_("Gocardless response received is invalid."))
             return None
         
         return response
@@ -508,18 +513,34 @@ class Gocardless:
         else:
             err = _("Gocardless error reported has invalid error data.")
         
-        log_error(err)
+        self._log_error(err)
         if raw:
             self._store_error({"error": err, "data": raw})
     
     
-    def _store_error(self, data):
+    @staticmethod
+    def _parse_json(data):
+        from .common import parse_json
+        
+        return parse_json(data, data)
+    
+    
+    @staticmethod
+    def _log_error(data):
+        from .common import log_error
+        
+        log_error(data)
+    
+    
+    @staticmethod
+    def _store_error(data):
         from .common import store_error
         
         store_error(data)
     
     
-    def _store_info(self, data):
+    @staticmethod
+    def _store_info(data):
         from .common import store_info
         
         store_info(data)

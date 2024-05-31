@@ -183,7 +183,6 @@ frappe.ui.form.on('Gocardless Bank', {
             function(e) {
                 this._error('Failed to link bank account.', frm.doc.bank, auth, e.message);
                 this.error(e.self ? e.message : __('Failed to link bank account to {0}.', [frm.doc.bank]));
-                frappe.gc_accounts.reset();
                 frm.reload_doc();
             }
         );
@@ -244,7 +243,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 this.is_debug && ret.unshift({
                     id: 'SANDBOXFINANCE_SFIN0000',
                     name: 'Testing Sandbox Finance',
-                    logo: 'https://altcoinsbox.com/wp-content/uploads/2023/03/the-sandbox-logo.jpg',
+                    logo: 'https://cdn.iconscout.com/icon/free/png-512/free-s-characters-character-alphabet-letter-36031.png?w=512',
                 });
                 
                 let country = cstr(frm.doc.country);
@@ -383,7 +382,7 @@ frappe.gc_banks = {
         let field = frm.get_field('bank'),
         val = cstr(frm.doc.bank),
         data = [];
-        if (!empty && val.length) data.push({label: __(val), value: val});
+        if (!empty && val.length) data[0] = {label: __(val), value: val};
         field.set_data(data);
     },
 };
@@ -391,7 +390,7 @@ frappe.gc_banks = {
 
 frappe.gc_accounts = {
     _loading_key: 'bank_accounts_loading',
-    _loading_time: 4,
+    _loading_time: 1,
     init(frm, field) {
         if (this._ready) return;
         this._enabled = frappe.gc().is_enabled;
@@ -404,10 +403,7 @@ frappe.gc_accounts = {
         this._field = field;
     },
     mark() {
-        this._mark && frappe.gc().$timeout(this._mark);
-        let ts = new Date();
-        ts.setMinutes(ts.getMinutes() + this._loading_time);
-        frappe.gc().cache().set(this._loading_key, ts.getTime());
+        if (this._mark) return;
         this._ready && this.loading();
         this._mark = frappe.gc().$timeout(function() {
             this.reset();
@@ -420,7 +416,6 @@ frappe.gc_accounts = {
         else this.render();
     },
     reset() {
-        frappe.gc().cache().del(this._loading_key);
         this._mark && frappe.gc().$timeout(this._mark);
         this._mark = this._linked = null;
     },
@@ -481,15 +476,15 @@ frappe.gc_accounts = {
 </tr>\
             ');
         } else {
-            for (let i = 0, l = this._frm.doc.bank_accounts.length, r; i < l; i++) {
+            for (let i = 0, l = this._frm.doc.bank_accounts.length, r, h; i < l; i++) {
                 r = this._frm.doc.bank_accounts[i];
-                r = [
+                h = [
                     this._render_account(r),
                     this._render_balance(r),
                     this._render_status(r),
                     this._render_action(r)
                 ].join('\n');
-                this._$body.append('<tr>' + r + '</tr>');
+                this._$body.append('<tr data-gc-account="' + r.account + '">' + h + '</tr>');
             }
             this.refresh();
         }
@@ -543,12 +538,10 @@ frappe.gc_accounts = {
         if (!row.balances) return '<td></td>';
         let list = frappe.gc().$parseJson(row.balances);
         if (!frappe.gc().$isArrVal(list)) return '<td></td>';
-        let html = frappe.gc().$map(list, frappe.gc().$fn(function(v) {
-            return '<small class="text-muted">'
-                + __(this._balance_labels[v.type])
-                + ': ' + format_currency(v.amount, v.currency)
-                + '</small>';
-        }, this)).join('<br/>');
+        let html = frappe.gc().$filter(frappe.gc().$map(list, function(v) {
+            if (!cint(v.reqd)) return null;
+            return format_currency(v.amount, v.currency);
+        })).join(' - ')';
         return '<td>' + html + '</td>';
     },
     _render_status(row) {
@@ -560,23 +553,59 @@ frappe.gc_accounts = {
         return '<td><span class="' + color + '">' + __(row.status) + '</span></td>';
     },
     _render_action(row) {
-        let html = '<button type="button" class="btn {color} btn-sm {action}"{attr}>{label}</button>',
+        let html = '<button type="button" class="btn btn-{color} {action}"{attr}>{label}</button>',
         actions = [],
-        exists = frappe.gc().$isStrVal(row.bank_account),
+        exists = frappe.gc().$isStrVal(row.bank_account_ref),
         disabled = row.status !== 'Ready' && row.status !== 'Enabled';
         exists && actions.push(html
             .replace('{action}', 'gc-link')
-            .replace('{color}', 'btn-success')
-            .replace('{attr}', ' data-gc-account="' + row.account + '"')
+            .replace('{color}', 'success')
+            .replace('{attr}', '')
             .replace('{label}', __('Edit'))
         );
         actions.push(html
             .replace('{action}', 'gc-action')
-            .replace('{color}', disabled ? 'btn-default' : (exists ? 'btn-info' : 'btn-primary'))
-            .replace('{attr}', disabled ? ' disabled' : ' data-gc-account="' + row.account + '"')
+            .replace('{color}', disabled ? 'default' : (exists ? 'info' : 'primary'))
+            .replace('{attr}', disabled ? ' disabled' : '')
             .replace('{label}', exists ? __('Sync') : __('Add'))
         );
-        return '<td>' + actions.join('') + '</td>';
+        return '<td><div class="btn-group btn-group-sm">' + actions.join('') + '</div></td>';
+    },
+    _on_balance(e) {
+        this._$body.find('.gc-balance').popover({
+            trigger: 'click',
+            placement: 'top',
+            content: frappe.gc().$fn(function(e) {
+                let $el = $(e.target),
+                account = $el.parents('tr').attr('data-gc-account');
+                if (!frappe.gc().$isStrVal(account)) return '';
+                let row = this._get_bank_account(account);
+                if (!row) '';
+                let list = frappe.gc().$parseJson(row.balances);
+                if (!frappe.gc().$isArrVal(list)) return '';
+                list = frappe.gc().$map(
+                    list, frappe.gc().$fn(function(v) {
+                        if (!cint(v.reqd)) return null;
+                        return '\
+            <tr>\
+                <td scope="row">' + __(this._balance_labels[v.type]) + '</td>\
+                <td class="text-center">' + format_currency(v.amount, v.currency) + '</td>\
+            </tr>\
+                        ';
+                    }, this)
+                );
+                return '\
+<div class="table-responsive m-0 p-0">\
+    <table class="table table-condensed table-bordered gc-table">\
+        <tbody>\
+            ' + list.join('\n') + '\
+        </tbody>\
+    </table>\
+</div>\
+                ';
+            }, this),
+            html: true
+        });
     },
     _on_action(e) {
         if (this._action_clicked) return;
@@ -594,7 +623,7 @@ frappe.gc_accounts = {
             frappe.gc()._log('Accounts: table action is disabled');
             return;
         }
-        let account = $el.attr('data-gc-account');
+        let account = $el.parents('tr').attr('data-gc-account');
         if (!frappe.gc().$isStrVal(account)) {
             this._toggle_btn($el, false);
             frappe.gc()._log('Accounts: unable to get account from table action');
@@ -612,7 +641,7 @@ frappe.gc_accounts = {
         frappe.gc().$timeout(function() {
             $el.removeData('gc_account_action_clicked');
         }, 3000);
-        if (!frappe.gc().$isStrVal(row.bank_account)) {
+        if (!frappe.gc().$isStrVal(row.bank_account_ref)) {
             this._show_dialog($el, row.account);
             return;
         }
@@ -625,7 +654,7 @@ frappe.gc_accounts = {
     },
     _on_link(e) {
         let $el = $(e.target),
-        account = $el.attr('data-gc-account');
+        account = $el.parents('tr').attr('data-gc-account');
         if (!frappe.gc().$isStrVal(account)) {
             frappe.gc()._log('Accounts Link: unable to get account from table action');
             return;
@@ -638,7 +667,7 @@ frappe.gc_accounts = {
             this._toggle_btn($el, false);
             return;
         }
-        frappe.set_route('Form', 'Bank Account', row.bank_account);
+        frappe.set_route('Form', 'Bank Account', row.bank_account_ref);
     },
     _show_prompt($el, account) {
         frappe.gc()._log('Accounts: prompting bank account sync dates');
@@ -681,13 +710,17 @@ frappe.gc_accounts = {
             }
     },
     _balance_labels: {
-        openingBooked: 'Opening',
-        closingBooked: 'closing',
-        expected: 'Expected',
-        forwardAvailable: 'Fwd. Interim',
-        interimAvailable: 'Avail. Interim',
-        interimBooked: 'Interim',
-        nonInvoiced: 'Non Invoiced',
+        closing: __('Closing'),
+        closing_booked: __('Closing Booked'),
+        day_balance: __('Day End Balance'),
+        forward: __('Forward Balance'),
+        info_balance: __('Info. Balance'),
+        temp_balance: __('Temp. Balance'),
+        temp_booked: __('Temp. Booked'),
+        uninvoiced: __('Non-Invoiced'),
+        opening: __('Opening'),
+        opening_booked: __('Opening Booked'),
+        prev_closing_booked: __('Prev Closing Booked'),
     },
     _create_spinner(el) {
         let spinner = $('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>');
@@ -798,9 +831,7 @@ frappe.gc_accounts = {
                 tpl: {
                     def: '\
 <tr>\
-    <td scope="row">\
-        <strong>{account_name}</strong>\
-    </td>\
+    <td scope="row">{account_name}</td>\
     <td>{account_link}</td>\
 </tr>\
                     ',
@@ -828,7 +859,7 @@ frappe.gc_accounts = {
                             if (!frappe.gc().$isArrVal(this._frm.doc.bank_accounts)) this._linked = [];
                             else this._linked = frappe.gc().$filter(frappe.gc().$map(
                                 this._frm.doc.bank_accounts, function(v) {
-                                    return this.$isStrVal(v.bank_account) ? v.bank_account : null;
+                                    return this.$isStrVal(v.bank_account_ref) ? v.bank_account_ref : null;
                             }));
                         }
                         for (let i = 0, l = this._accounts.length, r, a; i < l; i++) {

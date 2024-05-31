@@ -11,7 +11,7 @@ import frappe
 def add_account_type(name):
     dt = "Bank Account Type"
     if frappe.db.exists(dt, name):
-        return 1
+        return name
     
     try:
         (frappe.new_doc(dt)
@@ -21,7 +21,7 @@ def add_account_type(name):
         from .cache import clear_doc_cache
         
         clear_doc_cache(dt)
-        return 1
+        return name
     except Exception as exc:
         from frappe import _
         
@@ -33,4 +33,4 @@ def add_account_type(name):
             "exception": str(exc)
         })
         log_error(_("Unable to create bank account type \"{0}\".").format(name))
-        return 0
+        return None

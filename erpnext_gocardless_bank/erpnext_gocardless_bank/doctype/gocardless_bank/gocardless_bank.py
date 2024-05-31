@@ -24,8 +24,6 @@ class GocardlessBank(Document):
     
     def validate(self):
         self._check_app_status()
-        if not self.name:
-            self._error(_("A valid name is required."))
         if self.is_new():
             self._validate_new_data()
         else:
@@ -38,16 +36,27 @@ class GocardlessBank(Document):
         super(GocardlessBank, self).before_rename(olddn, newdn, merge)
         
         clear_doc_cache(self.doctype, olddn)
-        self._clean_app_status()
+        self._clean_flags()
     
     
     def before_save(self):
         self._check_app_status()
         clear_doc_cache(self.doctype, self.name)
+        if (
+            not self.bank_ref and self.bank and not self.is_new() and
+            not self.flags.get("update_bank_accounts", 0)
+        ):
+            from erpnext_gocardless_bank.libs import add_bank
+            
+            ref = add_bank(self.bank)
+            if ref:
+                self.bank_ref = ref
+            else:
+                self._error(_("ERPNext: Unable to create bank \"{0}\".").format(self.bank))
     
     
     def on_update(self):
-        self._clean_app_status()
+        self._clean_flags()
     
     
     def on_trash(self):
@@ -60,7 +69,7 @@ class GocardlessBank(Document):
     
     def after_delete(self):
         clear_doc_cache(self.doctype, self.name)
-        self._clean_app_status()
+        self._clean_flags()
     
     
     def _set_defaults(self):
@@ -125,19 +134,24 @@ class GocardlessBank(Document):
     
     
     def _check_app_status(self):
-        if not self.flags.get("status_checked", False):
+        if not self.flags.get("status_checked", 0):
             from erpnext_gocardless_bank.libs import check_app_status
             
             check_app_status()
-            self.flags.status_checked = True
+            self.flags.status_checked = 1
     
     
-    def _clean_app_status(self):
-        self.flags.pop("status_checked", False)
+    def _clean_flags(self):
+        keys = [
+            "update_bank_accounts",
+            "status_checked"
+        ]
+        for i in range(len(keys)):
+            self.flags.pop(keys.pop(0), None)
     
     
     def _error(self, msg):
         from erpnext_gocardless_bank.libs import error
         
-        self._clean_app_status()
+        self._clean_flags()
         error(msg, _(self.doctype))

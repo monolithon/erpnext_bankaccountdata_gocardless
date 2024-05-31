@@ -7,7 +7,7 @@
 import frappe
 
 
-# [Bank]
+# [Bank Account, Internal]
 def get_currencies_status():
     from .cache import get_cache
     
@@ -24,23 +24,24 @@ def get_currencies_status():
         strict=False
     )
     if not data or not isinstance(data, list):
-        data = {}
-    else:
-        from frappe.utils import cint
-        
-        data = {v["name"]:cint(v["enabled"]) for v in data}
+        return {}
+    
+    from frappe.utils import cint
     
     from .cache import set_cache
     
+    data = {v["name"]:cint(v["enabled"]) for v in data}
     set_cache(dt, key, data, 15 * 60)
     return data
 
 
-# [Bank]
-def enqueue_add_currencies(bank, names):
+# [Bank Account]
+def enqueue_add_currencies(names):
+    from .common import unique_key
     from .background import is_job_running
     
-    job_id = f"gocardless-add-currencies-{bank}"
+    job_id = unique_key(names)
+    job_id = f"gocardless-add-currencies-{job_id}"
     if not is_job_running(job_id):
         from .background import enqueue_job
         
@@ -59,27 +60,29 @@ def get_currency_status(name):
 
 # [Bank Transaction, Internal]
 def add_currencies(names):
+    currencies = get_currencies_status()
     dt = "Currency"
     cnt = 0
     for name in list(set(names)):
-        try:
-            (frappe.new_doc(dt)
-                .update({
-                    "currency_name": name,
-                    "enabled": 1,
-                    "from_gocardless": 1
+        if name not in currencies:
+            try:
+                (frappe.new_doc(dt)
+                    .update({
+                        "currency_name": name,
+                        "enabled": 1,
+                        "from_gocardless": 1
+                    })
+                    .insert(ignore_permissions=True, ignore_mandatory=True))
+                
+                cnt += 1
+            except Exception as exc:
+                from .common import store_error
+                
+                store_error({
+                    "error": "Unable to add currency.",
+                    "name": name,
+                    "exception": str(exc)
                 })
-                .insert(ignore_permissions=True, ignore_mandatory=True))
-            
-            cnt += 1
-        except Exception as exc:
-            from .common import store_error
-            
-            store_error({
-                "error": "Unable to add currency.",
-                "name": name,
-                "exception": str(exc)
-            })
     
     if cnt:
         from .cache import clear_doc_cache
@@ -88,10 +91,12 @@ def add_currencies(names):
 
 
 # [Bank]
-def enqueue_enable_currencies(bank, names):
+def enqueue_enable_currencies(names):
+    from .common import unique_key
     from .background import is_job_running
     
-    job_id = f"gocardless-enable-currencies-{bank}"
+    job_id = unique_key(names)
+    job_id = f"gocardless-enable-currencies-{job_id}"
     if not is_job_running(job_id):
         from .background import enqueue_job
         
@@ -104,20 +109,22 @@ def enqueue_enable_currencies(bank, names):
 
 # [Internal]
 def enable_currencies(names):
+    currencies = get_currencies_status()
     dt = "Currency"
     cnt = 0
     for name in list(set(names)):
-        try:
-            frappe.db.set_value(dt, name, "enabled", 1)
-            cnt += 1
-        except Exception as exc:
-            from .common import store_error
-            
-            store_error({
-                "error": "Unable to up currency.",
-                "name": name,
-                "exception": str(exc)
-            })
+        if name in currencies and not currencies[name]:
+            try:
+                frappe.db.set_value(dt, name, "enabled", 1)
+                cnt += 1
+            except Exception as exc:
+                from .common import store_error
+                
+                store_error({
+                    "error": "Unable to up currency.",
+                    "name": name,
+                    "exception": str(exc)
+                })
     
     if cnt:
         from .cache import clear_doc_cache

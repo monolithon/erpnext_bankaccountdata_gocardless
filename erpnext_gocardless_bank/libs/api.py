@@ -66,6 +66,22 @@ class Api:
         return f"accounts/{account_id}/balances/"
     
     
+    account_balance_types = {
+        "openingAvailable": "opening",
+        "openingBooked": "opening_booked",
+        "closingAvailable": "closing",
+        "closingBooked": "closing_booked",
+        "forwardAvailable": "forward",
+        "interimAvailable": "temp_balance",
+        "interimBooked": "temp_booked",
+        "expected": "day_balance",
+        "information": "info_balance",
+        "nonInvoiced": "uninvoiced",
+        "previouslyClosedBooked": "prev_closing_booked"
+    }
+    reqd_account_balance_types = ["closing", "opening"]
+    
+    
     @staticmethod
     def account_details(account_id):
         return f"accounts/{account_id}/details/"

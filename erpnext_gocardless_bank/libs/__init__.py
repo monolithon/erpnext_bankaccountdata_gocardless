@@ -7,7 +7,8 @@
 from .bank import (
     get_banks,
     get_bank_link,
-    save_bank_link
+    save_bank_link,
+    add_bank
 )
 from .bank_account import (
     store_bank_account,

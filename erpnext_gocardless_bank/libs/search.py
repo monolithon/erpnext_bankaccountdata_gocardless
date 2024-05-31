@@ -84,7 +84,7 @@ def prepare_data(data, dt, column, search, as_dict):
     def relevance_sorter(key):
         nonlocal args
         
-        value = _(key.name if args[1] else key[0])
+        value = _(key["name"] if args[1] else key[0])
         return (cstr(value).lower().startswith(args[0].lower()) is not True, value)
     
     data = sorted(data, key=relevance_sorter)

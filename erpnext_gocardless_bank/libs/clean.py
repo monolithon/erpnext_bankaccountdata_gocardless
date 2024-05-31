@@ -15,14 +15,15 @@ def enqueue_bank_trash(doc):
     if not is_job_running(job_id):
         from .background import enqueue_job
         
+        accounts = [v.bank_account_ref for v in doc.bank_accounts if v.bank_account_ref]
         enqueue_job(
             "erpnext_gocardless_bank.libs.clean.clean_trash",
             job_id,
             queue="long",
             name=doc.name,
-            bank=doc.bank,
+            bank=doc.bank_ref,
             company=doc.company,
-            accounts=[v.account for v in doc.bank_accounts]
+            accounts=accounts
         )
 
 
@@ -33,19 +34,21 @@ def clean_trash(name, bank, company, accounts):
     doc = settings()
     data = None
     if (
-        doc.clean_currency or
-        doc.clean_supplier or
-        doc.clean_customer
+        accounts and (
+            doc.clean_currency or
+            doc.clean_supplier or
+            doc.clean_customer
+        )
     ):
         data = get_transactions_data(accounts)
     
-    if doc.clean_bank_transaction:
+    if accounts and doc.clean_bank_transaction:
         clean_bank_transactions(accounts)
     
-    if doc.clean_bank_account:
+    if accounts and doc.clean_bank_account:
         clean_bank_accounts(accounts, bank, company)
     
-    if doc.clean_bank:
+    if bank and doc.clean_bank:
         clean_bank(bank)
     
     if data:
@@ -58,7 +61,7 @@ def clean_trash(name, bank, company, accounts):
         if doc.clean_customer and data["customer"]:
             clean_customer(data["customer"])
     
-    clean_sync_log(bank)
+    clean_sync_log(name)
 
 
 # [Internal]
@@ -109,12 +112,14 @@ def clean_bank_transactions(accounts):
 # [Internal]
 def clean_bank_accounts(names, bank, company):
     dt = "Bank Account"
-    clean_entries(dt, [
+    filters = [
         [dt, "name", "in", names],
-        [dt, "bank", "=", bank],
         [dt, "company", "=", company],
         [dt, "from_gocardless", "=", 1]
-    ])
+    ]
+    if bank:
+        filters.append([dt, "bank", "=", bank])
+    clean_entries(dt, filters)
 
 
 # [Internal]

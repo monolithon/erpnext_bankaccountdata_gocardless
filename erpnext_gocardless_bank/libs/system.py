@@ -47,6 +47,12 @@ def app_disabled_message():
     return _("{0} app is disabled.").format(_(__module__))
 
 
+# [Company]
+def get_access_companies():
+    doc = settings()
+    return [v.company for v in doc.access]
+
+
 # [Bank, Bank Account, Bank Transaction]
 def get_client(company: str, doc=None):
     if not doc:

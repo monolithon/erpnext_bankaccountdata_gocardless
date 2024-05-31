@@ -76,9 +76,7 @@ def get_bank_link(company, bank_id, ref_id, transaction_days=0, docname=None):
         not ref_id or not isinstance(ref_id, str) or
         (docname and not isinstance(docname, str))
     ):
-        from .common import store_error
-        
-        store_error({
+        _store_error({
             "error": "Invalid Gocardless bank link args",
             "company": company,
             "bank_id": bank_id,
@@ -107,28 +105,20 @@ def save_bank_link(name, auth_id, auth_expiry):
     ):
         return {"error": _("Data required to save Gocardless bank link are invalid.")}
     
-    from .cache import get_cached_doc
-    
-    doc = get_cached_doc("Gocardless Bank", name)
+    doc = get_bank_doc(name)
     if not doc:
         return {"error": _("Gocardless bank \"{0}\" doesn't exist.").format(name)}
     
-    is_new = 1 if not doc.auth_id or not doc.bank_accounts else 0
     doc.auth_id = auth_id
     doc.auth_expiry = auth_expiry
     doc.auth_status = "Linked"
     doc.save(ignore_permissions=True)
-    
-    if is_new:
-        enqueue_save_bank(doc.name, doc.bank, doc.company, auth_id)
-    else:
-        enqueue_update_bank(doc.name, doc.bank, doc.company, auth_id)
-    
+    enqueue_save_bank(doc.name, doc.bank, doc.company, auth_id, doc.bank_ref)
     return 1
 
 
 # [Internal]
-def enqueue_save_bank(name, bank, company, auth_id):
+def enqueue_save_bank(name, bank, company, auth_id, bank_ref):
     from .background import is_job_running
     
     job_id = f"gocardless-save-bank-{bank}"
@@ -138,67 +128,54 @@ def enqueue_save_bank(name, bank, company, auth_id):
         enqueue_job(
             "erpnext_gocardless_bank.libs.bank.save_bank",
             job_id,
+            timeout=30000,
             name=name,
             bank=bank,
             company=company,
-            auth_id=auth_id
-        )
-
-
-# [Internal]
-def enqueue_update_bank(name, bank, company, auth_id):
-    from .background import is_job_running
-    
-    job_id = f"gocardless-update-bank-{bank}"
-    if not is_job_running(job_id):
-        from .background import enqueue_job
-        
-        enqueue_job(
-            "erpnext_gocardless_bank.libs.bank.update_bank",
-            job_id,
-            name=name,
-            bank=bank,
-            company=company,
-            auth_id=auth_id
+            auth_id=auth_id,
+            bank_ref=bank_ref
         )
 
 
 # [Internal]*
-def save_bank(name, bank, company, auth_id):
-    if add_bank(bank):
-        from .bank_account import get_client_bank_accounts
-        
-        accounts = get_client_bank_accounts(company, bank, auth_id)
-        if accounts:
-            from .bank_account import store_bank_accounts
-            
-            store_bank_accounts(name, accounts)
-        else:
-            from .realtime import emit_bank_error
-            
-            emit_bank_error({
-                "name": name,
-                "bank": bank,
-                "error": _("Unable to create or update bank accounts of {0}.").format(bank)
-            })
-
-
-# [Internal]*
-def update_bank(name, bank, company, auth_id):
+def save_bank(name, bank, company, auth_id, bank_ref=None):
     from .bank_account import get_client_bank_accounts
     
-    accounts = get_client_bank_accounts(company, bank, auth_id, True)
+    status = 0
+    accounts = get_client_bank_accounts(company, bank, auth_id)
     if accounts:
         from .bank_account import store_bank_accounts
         
-        store_bank_accounts(name, accounts)
+        status = store_bank_accounts(name, accounts)
+        if status:
+            if not bank_ref:
+                ref = add_bank(bank, True)
+                if ref:
+                    doc = get_bank_doc(name)
+                    if doc:
+                        doc.bank_ref = ref
+                        doc.flags.update_bank_accounts = 1
+                        doc.save(ignore_permissions=True)
+            
+            _emit_reload({
+                "name": name,
+                "bank": bank
+            })
+        else:
+            _emit_error({
+                "name": name,
+                "bank": bank,
+                "error": _("Unable to create or update bank accounts of bank \"{0}\".").format(bank)
+            })
+    
+    return status
 
 
-# [Internal]*
-def add_bank(bank: str):
+# [G Bank, Internal]*
+def add_bank(bank: str, in_queue=False):
     dt = "Bank"
     if frappe.db.exists(dt, bank):
-        return 1
+        return bank
     
     try:
         (frappe.new_doc(dt)
@@ -211,18 +188,44 @@ def add_bank(bank: str):
         from .cache import clear_doc_cache
         
         clear_doc_cache(dt)
-        return 1
+        return bank
     except Exception as exc:
-        from .common import store_error
-        from .realtime import emit_bank_error
-        
-        store_error({
+        _store_error({
             "error": "Unable to add new bank.",
             "bank": bank,
             "exception": str(exc)
         })
-        emit_bank_error({
-            "bank": bank,
-            "error": _("Unable to add the bank \"{0}\".").format(bank)
-        })
-        return 0
+        if in_queue:
+            _emit_error({
+                "bank": bank,
+                "error": _("ERPNext: Unable to create bank \"{0}\".").format(bank)
+            })
+        return None
+
+
+# [Internal]
+def get_bank_doc(name):
+    from .cache import get_cached_doc
+    
+    return get_cached_doc("Gocardless Bank", name)
+
+
+# [Internal]
+def _store_error(data):
+    from .common import store_error
+    
+    store_error(data)
+
+
+# [Internal]
+def _emit_error(data):
+    from .realtime import emit_bank_error
+    
+    emit_bank_error(data)
+
+
+# [Internal]
+def _emit_reload(data):
+    from .realtime import emit_reload_bank_accounts
+    
+    emit_reload_bank_accounts(data)
