@@ -466,7 +466,10 @@ frappe.gc_accounts = {
     render() {
         frappe.gc()._log('Accounts: rendering bank account table');
         if (!this._$wrapper) this._build();
-        else this._$body.empty();
+        else {
+            this._destroy_popover();
+            this._$body.empty();
+        }
         if (!frappe.gc().$isArrVal(this._frm.doc.bank_accounts)) {
             this._$body.append('\
 <tr>\
@@ -543,7 +546,11 @@ frappe.gc_accounts = {
             if (!cint(v.reqd)) return null;
             return format_currency(v.amount, v.currency);
         })).join(' - ');
-        return '<td>' + html + '</td>';
+        return '\
+        <td>\
+            <span class="gc-balance">' + html + '</span>\
+        </td>\
+        ';
     },
     _render_status(row) {
         let color = 'text-muted';
@@ -572,41 +579,46 @@ frappe.gc_accounts = {
         );
         return '<td><div class="btn-group btn-group-sm">' + actions.join('') + '</div></td>';
     },
-    _init_popover(e) {
+    _init_popover() {
+        var me = this;
         this._$body.find('.gc-balance').popover({
-            trigger: 'click',
+            trigger: 'hover click',
             placement: 'top',
-            content: frappe.gc().$fn(function(e) {
-                let $el = $(e.target),
+            title: __('Account Balance'),
+            content: function() {
+                let $el = $(this),
                 account = $el.parents('tr').attr('data-gc-account');
                 if (!frappe.gc().$isStrVal(account)) return '';
-                let row = this._get_bank_account(account);
+                let row = me._get_bank_account(account);
                 if (!row) '';
                 let list = frappe.gc().$parseJson(row.balances);
                 if (!frappe.gc().$isArrVal(list)) return '';
-                list = frappe.gc().$map(
-                    list, frappe.gc().$fn(function(v) {
-                        if (!cint(v.reqd)) return null;
-                        return '\
+                list = frappe.gc().$map(list, function(v) {
+                    if (!cint(v.reqd)) return null;
+                    return '\
             <tr>\
-                <td scope="row">' + __(this._balance_labels[v.type]) + '</td>\
+                <td scope="row">' + __(me._balance_labels[v.type]) + '</td>\
                 <td class="text-center">' + format_currency(v.amount, v.currency) + '</td>\
             </tr>\
-                        ';
-                    }, this)
-                );
+                    ';
+                });
                 return '\
 <div class="table-responsive m-0 p-0">\
-    <table class="table table-condensed table-bordered gc-table">\
+    <table class="table table-sm table-borderless gc-table">\
         <tbody>\
             ' + list.join('\n') + '\
         </tbody>\
     </table>\
 </div>\
                 ';
-            }, this),
+            },
             html: true
         });
+    },
+    _destroy_popover() {
+        try {
+            this._$body.find('.gc-balance').popover('dispose');
+        } catch(_) {}
     },
     _on_action(e) {
         if (this._action_clicked) return;
