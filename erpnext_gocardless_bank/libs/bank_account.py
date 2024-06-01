@@ -79,15 +79,15 @@ def store_bank_account(name, account):
     
     from .currency import get_currency_status
     
-    currency_status = get_currency_status(data["account_currency"])
+    currency_status = get_currency_status(row.account_currency)
     if currency_status is None:
         from .currency import enqueue_add_currencies
         
-        enqueue_add_currencies([data["account_currency"]])
+        enqueue_add_currencies([row.account_currency]])
     elif not currency_status:
         from .currency import enqueue_enable_currencies
         
-        enqueue_enable_currencies([data["account_currency"]])
+        enqueue_enable_currencies([row.account_currency]])
     
     bank_account = add_bank_account(doc.name, doc.company, doc.bank, data)
     if bank_account and not row.bank_account_ref:
