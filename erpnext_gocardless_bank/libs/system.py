@@ -28,7 +28,7 @@ def get_settings():
     doc = settings()
     return {
         "is_enabled": 1 if doc.is_enabled else 0,
-        "is_debug": 0 if __production__ else 1
+        "prod": 1 if __production__ else 0
     }
 
 
