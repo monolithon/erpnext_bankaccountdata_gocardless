@@ -341,15 +341,14 @@ def prepare_bank_accounts(accounts, bank, company):
 # [Internal]
 def make_account_name(data: dict, exist: list, idx: int):
     name = [data["name"], str(data["currency"]).upper()]
-    tmp = " - ".join(name)
-    if tmp not in exist:
-        exist.append(tmp)
-        return [tmp, idx]
+    name = " - ".join(name)
+    if name not in exist:
+        exist.append(name)
+        return [name, idx]
     
     for i in range(10):
-        name[2] = "#" + str(idx)
+        tmp = name + " - #" + str(idx)
         idx += 1
-        tmp = " - ".join(name)
         if tmp not in exist:
             exist.append(tmp)
             return [tmp, idx]
