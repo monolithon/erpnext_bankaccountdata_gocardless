@@ -7,7 +7,7 @@
 from datetime import datetime
 
 
-# [Access, Bank Transaction, Schedule]
+# [Access, Schedule]
 def now_utc():
     return datetime.utcnow()
 
@@ -49,7 +49,7 @@ def to_datetime(dt):
     return dt.strftime(DATETIME_FORMAT)
 
 
-# [Access]
+# [Access, Internal]
 def to_datetime_obj(dt: str):
     from frappe.utils import get_datetime
     
@@ -85,6 +85,16 @@ def add_date(dt: str, **kwargs):
     from frappe.utils import add_to_date
     
     return add_to_date(dt, as_datetime=False, **kwargs)
+
+
+# [Bank Transaction]
+def date_to_datetime_obj(dt: str, start=False):
+    if start:
+        dt = dt.split(" ")[0]
+        return to_datetime_obj(f"{dt} 00:00:00.000")
+    
+    dt = to_date_obj(dt)
+    return datetime.combine(dt, datetime.utcnow().time())
 
 
 # [Bank Transaction]

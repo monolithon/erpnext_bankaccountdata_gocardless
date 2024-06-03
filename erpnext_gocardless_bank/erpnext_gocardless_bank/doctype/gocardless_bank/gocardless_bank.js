@@ -340,7 +340,7 @@ frappe.gc_banks = {
             if (!d.label) d.label = d.value;
             let idx = frm._bank.list.idx[frm._bank.list.key][d.value],
             html = '<strong>' + d.label + '</strong>',
-            img = '<img src="{0}" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/>',
+            img = '<img src="{0}" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
             fnd = 0;
             if (frappe.gc().$isNum(idx) && idx >= 0) {
                 idx = frm._bank.list.cache[frm._bank.list.key][idx];
@@ -763,8 +763,10 @@ frappe.gc_accounts = {
             bank: cstr(this._frm.docname),
             account: account,
         };
-        if (from_dt) args.from_dt = from_dt;
-        if (to_dt) args.to_dt = to_dt;
+        if (from_dt) {
+            args.from_dt = from_dt;
+            if (to_dt) args.to_dt = to_dt;
+        }
         frappe.gc().request(
             'enqueue_bank_transactions_sync',
             args,

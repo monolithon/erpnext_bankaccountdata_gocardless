@@ -189,8 +189,10 @@ frappe.ui.form.on('Bank Account', {
             bank: frm._gc.data.bank,
             account: frm._gc.data.account,
         };
-        if (from_dt) args.from_dt = from_dt;
-        if (to_dt) args.to_dt = to_dt;
+        if (from_dt) {
+            args.from_dt = from_dt;
+            if (to_dt) args.to_dt = to_dt;
+        }
         frappe.gc().request(
             'enqueue_bank_transactions_sync',
             args,
