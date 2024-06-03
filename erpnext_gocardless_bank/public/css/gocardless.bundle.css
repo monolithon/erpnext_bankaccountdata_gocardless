@@ -32,16 +32,9 @@ html[dir="rtl"] .gc-table td[scope="row"] {
     text-align: right;
 }
 .gc-action > .spinner-border {
-    margin-right: 0.5rem;
+    margin-right: 0.25rem;
 }
 html[dir="rtl"] .gc-action > .spinner-border {
-    margin-left: 0.5rem;
-    margin-right: 0;
-}
-.gc-link {
-    margin-right: 0.5rem;
-}
-html[dir="rtl"] .gc-link {
-    margin-left: 0.5rem;
+    margin-left: 0.25rem;
     margin-right: 0;
 }

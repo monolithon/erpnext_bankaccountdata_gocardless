@@ -539,6 +539,7 @@ frappe.gc_accounts = {
         return '<td scope="row">' + html + '</td>';
     },
     _render_balance(row) {
+        frappe.gc()._debug('Balances', row.balances);
         if (!row.balances) return '<td></td>';
         let list = frappe.gc().$parseJson(row.balances);
         if (!frappe.gc().$isArrVal(list)) return '<td></td>';
@@ -705,7 +706,7 @@ frappe.gc_accounts = {
                     max_date: frappe.datetime.now_date(true),
                 },
             ],
-            frappe.$fn(function(vals) {
+            frappe.gc().$fn(function(vals) {
                 frappe.gc()._log('Accounts: syncing bank account', vals);
                 this._enqueue_sync($el, account, vals.from_dt, vals.to_dt);
             }, this),
@@ -908,19 +909,19 @@ frappe.gc_accounts = {
                             }
                             me._dialog.gc.hide_spinner();
                             frappe.gc()._log('Accounts: storing bank account success');
-                            frappe.gc().success_(__('The Gocardless bank account "{0}" has been added successfully', [this._dialog.gc.account]));
+                            frappe.gc().success_(__('The Gocardless bank account "{0}" has been added successfully', [me._dialog.gc.account]));
                             me._frm.reload_doc();
                         },
                         function() {
                             me._dialog.gc.hide_spinner();
                             frappe.gc()._error('Accounts: storing bank account error');
-                            frappe.gc().error(__('Unable to add the Gocardless bank account "{0}" for the bank "{1}".', [account, cstr(me._frm.docname)]));
+                            frappe.gc().error(__('Unable to add the Gocardless bank account "{0}" for the bank "{1}".', [me._dialog.gc.account, cstr(me._frm.docname)]));
                         }
                     );
                 }, this),
                 on_link_click: frappe.gc().$fn(function(e) {
                     this._dialog.hide();
-                    let acc_name = $(e.target).attr('data-bank-account');
+                    var acc_name = $(e.target).attr('data-bank-account');
                     if (!frappe.gc().$isStrVal(acc_name)) {
                         this._dialog.gc.hide_spinner(true);
                         frappe.gc()._log('Accounts: unable to get the bank account name');
