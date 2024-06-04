@@ -107,26 +107,27 @@ def sync_banks():
 
 # [Internal]
 def sync_bank(name, trigger):
+    from frappe.utils import cint
+    
     from .bank_transaction import (
         _SYNC_KEY_,
-        queue_bank_transactions_sync
+        queue_bank_transactions_sync,
+        get_dates_list
     )
     from .cache import (
         get_cached_doc,
         get_cache
     )
     from .datetime import (
-        now_utc,
-        to_date,
+        today_utc_date,
         to_date_obj,
-        reformat_date,
-        add_date
+        reformat_date
     )
     from .system import settings, get_client
     
     dt = "Gocardless Bank"
-    now = now_utc()
-    today = to_date(now)
+    today = today_utc_date()
+    today_obj = to_date_obj(today)
     doc = get_cached_doc(dt, name)
     settings = settings()
     client = get_client()
@@ -134,56 +135,34 @@ def sync_bank(name, trigger):
         if v.status != "Ready" or get_cache(_SYNC_KEY_, v.account, True):
             continue
         
-        from_dt = None
-        to_dt = today
-        if v.last_sync:
-            from frappe.utils import cint
-            
+        if not v.last_sync:
+            dts = [[today, today, 1]]
+        else:
             from_dt = reformat_date(v.last_sync)
             from_obj = to_date_obj(from_dt)
-            diff = now - from_obj
+            diff = today_obj - from_obj
             diff = cint(diff.days)
             if diff <= 0:
-                from_dt = None
+                dts = [[today, today, 1]]
+            elif diff == 1:
+                dts = [[from_dt, today, 2]]
             else:
-                diff = to_date_obj(to_dt) - from_obj
-                diff = cint(diff.days)
-                if diff > 1:
-                    from .bank_transaction import get_dates_list
-                    
-                    for dt in get_dates_list(from_dt, to_dt):
-                        if not queue_bank_transactions_sync(
-                            settings, client, name, doc.bank, trigger,
-                            v.name, v.account, v.account_id,
-                            v.bank_account, dt[0], dt[1], dt[2]
-                        ):
-                            _store_error({
-                                "error": "An error was raised while syncing bank account.",
-                                "bank": name,
-                                "trigger": trigger,
-                                "from_dt": dt[0],
-                                "to_dt": dt[1],
-                                "data": v.as_dict(convert_dates_to_str=True)
-                            })
-                    
-                    return 1
+                dts = get_dates_list(from_dt, today)
         
-        if not from_dt:
-            from_dt = add_date(now, days=-1, as_string=True)
-        
-        if not queue_bank_transactions_sync(
-            settings, client, name, doc.bank, trigger,
-            v.name, v.account, v.account_id,
-            v.bank_account, from_dt, to_dt
-        ):
-            _store_error({
-                "error": "An error was raised while syncing bank account.",
-                "bank": name,
-                "trigger": trigger,
-                "from_dt": from_dt,
-                "to_dt": to_dt,
-                "data": v.as_dict(convert_dates_to_str=True)
-            })
+        for dt in dts:
+            if not queue_bank_transactions_sync(
+                settings, client, name, doc.bank, trigger,
+                v.name, v.account, v.account_id,
+                v.bank_account, dt[0], dt[1], dt[2]
+            ):
+                _store_error({
+                    "error": "An error was raised while syncing bank account.",
+                    "bank": name,
+                    "trigger": trigger,
+                    "from_dt": dt[0],
+                    "to_dt": dt[1],
+                    "data": v.as_dict(convert_dates_to_str=True)
+                })
 
 
 # [Internal]

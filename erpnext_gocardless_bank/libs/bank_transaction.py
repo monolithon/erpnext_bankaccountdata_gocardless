@@ -67,12 +67,12 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         
         from .datetime import (
             reformat_date,
-            date_to_datetime_obj
+            to_date_obj
         )
         
-        today_obj = date_to_datetime_obj(today, True)
+        today_obj = to_date_obj(today)
         from_dt = reformat_date(from_dt)
-        from_obj = date_to_datetime_obj(from_dt, True)
+        from_obj = to_date_obj(from_dt)
         from_diff = today_obj - from_obj
         from_diff = cint(from_diff.days)
         if from_diff <= 0:
@@ -84,14 +84,14 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
                 
                 diff = from_diff - trans_days
                 from_dt = add_date(from_dt, days=diff, as_string=True)
-                from_obj = date_to_datetime_obj(from_dt, True)
+                from_obj = to_date_obj(from_dt)
             
             if not to_dt:
                 to_dt = from_dt
             else:
                 to_dt = reformat_date(to_dt)
                 if to_dt != from_dt:
-                    to_obj = date_to_datetime_obj(to_dt, True)
+                    to_obj = to_date_obj(to_dt)
                     diff = to_obj - today_obj
                     diff = cint(diff.days)
                     if diff > 0:
