@@ -203,7 +203,7 @@ def add_bank(bank: str, in_queue=False):
         return None
 
 
-# [Internal]
+# [Bank Transaction, Internal]
 def get_bank_doc(name):
     from .cache import get_cached_doc
     

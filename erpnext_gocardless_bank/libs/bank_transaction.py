@@ -40,15 +40,19 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     if get_cache(_SYNC_KEY_, account, True):
         return {"info": _("Bank transactions sync is in progress.")}
     
-    from .cache import get_cached_doc
+    from .bank import get_bank_doc
     
-    dt = "Gocardless Bank"
-    doc = get_cached_doc(dt, bank)
+    doc = get_bank_doc(bank)
     if not doc:
         return {"error": _("Gocardless bank \"{0}\" doesn't exist.").format(bank)}
     
-    accounts = {v.account:v for v in doc.bank_accounts}
-    if account not in accounts:
+    data = None
+    for v in doc.bank_accounts:
+        if v.account == account:
+            data = v
+            break
+    
+    if not data:
         return {"error": _("Bank account \"{0}\" doesn't belong to Gocardless bank \"{1}\".").format(account, bank)}
     
     from .system import get_client
@@ -61,13 +65,13 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     from .datetime import today_utc_date
     
     today = today_utc_date()
-    data = accounts[account]
     _store_info({
         "info": "Before preparing from & to dates",
-        "bank": bank,
-        "account": account,
+        "bank": doc.name,
+        "account": data.account,
         "from": from_dt,
-        "to": to_dt
+        "to": to_dt,
+        "data": data.as_dict(convert_dates_to_str=True)
     })
     if from_dt:
         from frappe.utils import cint
@@ -116,35 +120,37 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     if from_dt == to_dt:
         _store_info({
             "info": "After preparing from & to dates",
-            "bank": bank,
-            "account": account,
+            "bank": doc.name,
+            "account": data.account,
             "from": from_dt,
-            "to": to_dt
+            "to": to_dt,
+            "data": data.as_dict(convert_dates_to_str=True)
         })
         if not queue_bank_transactions_sync(
-            settings, client, bank, doc.bank, "Manual",
+            settings, client, doc.name, doc.bank, "Manual",
             data.name, data.account, data.account_id,
-            data.account_currency, data.bank_account,
+            data.account_currency, data.bank_account_ref,
             from_dt, to_dt, 1
         ):
             return {
                 "error": _("An error was raised while syncing bank account \"{0}\" of Gocardless bank \"{1}\".")
-                    .format(data.account, bank)
+                    .format(data.account, doc.name)
             }
     else:
         has_error = 0
         dts = get_dates_list(from_dt, to_dt)
         _store_info({
             "info": "After preparing from & to dates",
-            "bank": bank,
-            "account": account,
-            "dates": dts
+            "bank": doc.name,
+            "account": data.account,
+            "dates": dts,
+            "data": data.as_dict(convert_dates_to_str=True)
         })
         for dt in dts:
             if not queue_bank_transactions_sync(
-                settings, client, bank, doc.bank, "Manual",
+                settings, client, doc.name, doc.bank, "Manual",
                 data.name, data.account, data.account_id,
-                data.account_currency, data.bank_account,
+                data.account_currency, data.bank_account_ref,
                 dt[0], dt[1], dt[2]
             ):
                 has_error += 1
@@ -152,7 +158,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         if has_error:
             return {
                 "error": _("An error was raised while syncing bank account \"{0}\" of Gocardless bank \"{1}\".")
-                    .format(data.account, bank)
+                    .format(data.account, doc.name)
             }
     
     return 1
@@ -196,7 +202,7 @@ def get_dates_list(from_dt, to_dt):
 # [Schedule, Internal]
 def queue_bank_transactions_sync(
     settings, client, bank, account_bank, trigger, account_name,
-    account, account_id, account_currency, bank_account,
+    account, account_id, account_currency, bank_account_ref,
     from_dt, to_dt, dt_diff=1
 ):
     from .datetime import today_utc_date
@@ -245,7 +251,7 @@ def queue_bank_transactions_sync(
             account=account,
             account_id=account_id,
             account_currency=account_currency,
-            bank_account=bank_account,
+            bank_account_ref=bank_account_ref,
             from_dt=from_dt,
             to_dt=to_dt
         )
@@ -256,7 +262,7 @@ def queue_bank_transactions_sync(
 # [Internal]
 def sync_bank_transactions(
     settings, client, sync_id, bank, account_bank, trigger, account_name,
-    account, account_id, account_currency, bank_account, from_dt, to_dt
+    account, account_id, account_currency, bank_account_ref, from_dt, to_dt
 ):
     transactions = client.get_account_transactions(account_id, from_dt, to_dt)
     if transactions and "error" in transactions:
@@ -289,7 +295,7 @@ def sync_bank_transactions(
                     
                     add_transactions(
                         result, settings, sync_id, bank, account_bank,
-                        trigger, account, account_currency, bank_account, k,
+                        trigger, account, account_currency, bank_account_ref, k,
                         client.prepare_entries(transactions.pop(k))
                     )
                 else:
@@ -325,20 +331,20 @@ def sync_bank_transactions(
 # [Internal]
 def add_transactions(
     result, settings, sync_id, bank, account_bank, trigger,
-    account, account_currency, bank_account, status, transactions
+    account, account_currency, bank_account_ref, status, transactions
 ):
     result.synced = True
     for i in range(len(transactions)):
         new_bank_transaction(
             result, settings, account_bank, account, account_currency,
-            bank_account, transactions.pop(0), status
+            bank_account_ref, transactions.pop(0), status
         )
 
 
 # [Internal]
 def new_bank_transaction(
     result, settings, account_bank, account,
-    account_currency, bank_account, data, status
+    account_currency, bank_account_ref, data, status
 ):
     from .datetime import today_utc_datetime
     
@@ -349,7 +355,7 @@ def new_bank_transaction(
                 "account_bank": account_bank,
                 "account": account,
                 "account_currency": account_currency,
-                "bank_account": bank_account,
+                "bank_account_ref": bank_account_ref,
                 "status": status,
                 "data": data
             })
@@ -366,7 +372,7 @@ def new_bank_transaction(
                 "account_bank": account_bank,
                 "account": account,
                 "account_currency": account_currency,
-                "bank_account": bank_account,
+                "bank_account_ref": bank_account_ref,
                 "status": status,
                 "data": data
             })
@@ -381,7 +387,7 @@ def new_bank_transaction(
                 "account_bank": account_bank,
                 "account": account,
                 "account_currency": account_currency,
-                "bank_account": bank_account,
+                "bank_account_ref": bank_account_ref,
                 "status": status,
                 "data": data
             })
@@ -396,7 +402,7 @@ def new_bank_transaction(
                 "account_bank": account_bank,
                 "account": account,
                 "account_currency": account_currency,
-                "bank_account": bank_account,
+                "bank_account_ref": bank_account_ref,
                 "status": status,
                 "data": data
             })
@@ -415,7 +421,7 @@ def new_bank_transaction(
                     "account_bank": account_bank,
                     "account": account,
                     "account_currency": account_currency,
-                    "bank_account": bank_account,
+                    "bank_account_ref": bank_account_ref,
                     "status": status,
                     "data": data
                 })
@@ -431,7 +437,7 @@ def new_bank_transaction(
                     "account_bank": account_bank,
                     "account": account,
                     "account_currency": account_currency,
-                    "bank_account": bank_account,
+                    "bank_account_ref": bank_account_ref,
                     "status": status,
                     "data": data
                 })
@@ -461,7 +467,7 @@ def new_bank_transaction(
             entry_data = frappe._dict({
                 "date": reformat_date(data["date"]),
                 "status": status,
-                "bank_account": bank_account,
+                "bank_account": bank_account_ref,
                 "deposit": debit,
                 "withdrawal": credit,
                 "currency": data["currency"],
@@ -486,7 +492,7 @@ def new_bank_transaction(
                 "account_bank": account_bank,
                 "account": account,
                 "account_currency": account_currency,
-                "bank_account": bank_account,
+                "bank_account_ref": bank_account_ref,
                 "status": status,
                 "data": data,
                 "exception": str(exc)

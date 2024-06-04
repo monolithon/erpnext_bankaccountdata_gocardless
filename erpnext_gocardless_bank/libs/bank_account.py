@@ -325,14 +325,12 @@ def prepare_bank_accounts(accounts, bank, company):
         result.append({
             "account": v["name"],
             "account_id": v["id"],
+            "account_currency": v["currency"],
+            "status": v["status"],
             "account_type": v.get("cashAccountType", ""),
             "account_no": v.get("resourceId", ""),
-            "account_currency": v["currency"],
             "iban": v.get("iban", ""),
-            "balances": v["balances"],
-            "status": v["status"],
-            "bank_account_ref": "",
-            "bank_account_type_ref": ""
+            "balances": v["balances"]
         })
     
     return result if result else 0

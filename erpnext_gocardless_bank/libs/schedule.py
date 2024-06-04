@@ -109,15 +109,13 @@ def sync_banks():
 def sync_bank(name, trigger):
     from frappe.utils import cint
     
+    from .bank import get_bank_doc
     from .bank_transaction import (
         _SYNC_KEY_,
         queue_bank_transactions_sync,
         get_dates_list
     )
-    from .cache import (
-        get_cached_doc,
-        get_cache
-    )
+    from .cache import get_cache
     from .datetime import (
         today_utc_date,
         to_date_obj,
@@ -125,10 +123,9 @@ def sync_bank(name, trigger):
     )
     from .system import settings, get_client
     
-    dt = "Gocardless Bank"
     today = today_utc_date()
-    today_obj = to_date_obj(today)
-    doc = get_cached_doc(dt, name)
+    today_obj = None
+    doc = get_bank_doc(name)
     settings = settings()
     client = get_client()
     for v in doc.bank_accounts:
@@ -138,6 +135,9 @@ def sync_bank(name, trigger):
         if not v.last_sync:
             dts = [[today, today, 1]]
         else:
+            if not today_obj:
+                today_obj = to_date_obj(today)
+            
             from_dt = reformat_date(v.last_sync)
             from_obj = to_date_obj(from_dt)
             diff = today_obj - from_obj
@@ -151,9 +151,9 @@ def sync_bank(name, trigger):
         
         for dt in dts:
             if not queue_bank_transactions_sync(
-                settings, client, name, doc.bank, trigger,
-                v.name, v.account, v.account_id,
-                v.bank_account, dt[0], dt[1], dt[2]
+                settings, client, doc.name, doc.bank, trigger,
+                v.name, v.account, v.account_id, v.account_currency,
+                v.bank_account_ref, dt[0], dt[1], dt[2]
             ):
                 _store_error({
                     "error": "An error was raised while syncing bank account.",
