@@ -62,6 +62,13 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     
     today = today_utc_date()
     data = accounts[account]
+    _store_info({
+        "info": "Before preparing from & to dates",
+        "bank": bank,
+        "account": account,
+        "from": from_dt,
+        "to": to_dt
+    })
     if from_dt:
         from frappe.utils import cint
         
@@ -107,6 +114,13 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         to_dt = today
     
     if from_dt == to_dt:
+        _store_info({
+            "info": "After preparing from & to dates",
+            "bank": bank,
+            "account": account,
+            "from": from_dt,
+            "to": to_dt
+        })
         if not queue_bank_transactions_sync(
             settings, client, bank, doc.bank, "Manual",
             data.name, data.account, data.account_id,
@@ -119,7 +133,14 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
             }
     else:
         has_error = 0
-        for dt in get_dates_list(from_dt, to_dt):
+        dts = get_dates_list(from_dt, to_dt)
+        _store_info({
+            "info": "After preparing from & to dates",
+            "bank": bank,
+            "account": account,
+            "dates": dts
+        })
+        for dt in dts:
             if not queue_bank_transactions_sync(
                 settings, client, bank, doc.bank, "Manual",
                 data.name, data.account, data.account_id,
