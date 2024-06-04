@@ -180,6 +180,7 @@ def get_bank_account_data(account):
             doc.parent,
             pdoc.company,
             doc.account,
+            doc.bank_account_ref,
             doc.status,
             doc.last_sync
         )
@@ -196,7 +197,7 @@ def get_bank_account_data(account):
     
     data = data.pop(0)
     ret = {
-        "bank_account": account,
+        "bank_account": data["bank_account_ref"],
         "status": data["status"]
     }
     if data["status"] == "Ready":

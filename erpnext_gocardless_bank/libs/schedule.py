@@ -137,13 +137,26 @@ def sync_bank(settings, name, today, trigger):
         return 0
     
     for v in doc.bank_accounts:
-        if v.status != "Ready" or get_cache(_SYNC_KEY_, v.account, True):
+        if (
+            v.status != "Ready" or
+            not v.bank_account_ref or
+            get_cache(_SYNC_KEY_, v.account, True)
+        ):
             continue
         
+        row = {
+            "row_name": v.name,
+            "account": v.account,
+            "account_id": v.account_id,
+            "account_currency": v.account_currency,
+            "status": v.status,
+            "bank_account_ref": v.bank_account_ref,
+            "last_sync": v.last_sync
+        }
         fdt = today
         tdt = today
-        if v.last_sync:
-            fdt = reformat_datetime(v.last_sync)
+        if row["last_sync"]:
+            fdt = reformat_datetime(row["last_sync"])
             fdt = fdt.split(" ")[0]
             if not is_date_gt(today, fdt):
                 fdt = today
@@ -163,8 +176,9 @@ def sync_bank(settings, name, today, trigger):
             dt = dates.pop(0)
             if not queue_bank_transactions_sync(
                 settings, client, doc.name, doc.bank, trigger,
-                v.name, v.account, v.account_id, v.account_currency,
-                v.bank_account_ref, dt[0], dt[1], dt[2]
+                row["row_name"], row["account"], row["account_id"],
+                row["account_currency"], row["bank_account_ref"],
+                dt[0], dt[1], dt[2]
             ):
                 err_dates.append([dt[0], dt[1]])
         
@@ -172,10 +186,10 @@ def sync_bank(settings, name, today, trigger):
             _store_error({
                 "error": "Error was raised in schedule while syncing bank account.",
                 "bank": doc.name,
-                "account": v.account,
+                "account": row["account"],
                 "trigger": trigger,
                 "dates": err_dates,
-                "data": v.as_dict(convert_dates_to_str=True)
+                "data": row
             })
 
 

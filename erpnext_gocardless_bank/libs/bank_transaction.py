@@ -47,30 +47,44 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     data = None
     for v in doc.bank_accounts:
         if v.account == account:
-            data = v
+            data = {
+                "row_name": v.name,
+                "account": v.account,
+                "account_id": v.account_id,
+                "account_currency": v.account_currency,
+                "status": v.status,
+                "bank_account_ref": v.bank_account_ref
+            }
             break
     
     if not data:
         return {"error": _("Bank account \"{0}\" doesn't belong to bank \"{1}\".").format(account, doc.name)}
     
-    if data.status != "Ready":
+    if data["status"] != "Ready":
         return {
             "error": (
                 _("Bank account \"{0}\" of bank \"{1}\" isn't ready.")
-                .format(data.account, doc.name)
+                .format(data["account"], doc.name)
+            )
+        }
+    
+    if not data["bank_account_ref"]:
+        return {
+            "error": (
+                _("Bank account \"{0}\" of bank \"{1}\" hasn't been added to ERPNext.")
+                .format(data["account"], doc.name)
             )
         }
     
     from .cache import get_cache
     
-    if get_cache(_SYNC_KEY_, data.account, True):
+    if get_cache(_SYNC_KEY_, data["account"], True):
         return {"success": 1}
     
     from .system import get_client
     
     client = get_client(doc.company, settings)
     if isinstance(client, dict):
-        client["disabled"] = 1
         return client
     
     from .datetime import today_date
@@ -79,10 +93,10 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     _store_info({
         "info": "Before preparing from & to dates",
         "bank": doc.name,
-        "account": data.account,
+        "account": data["account"],
         "from": from_dt,
         "to": to_dt,
-        "data": data.as_dict(convert_dates_to_str=True)
+        "data": data
     })
     if not from_dt:
         from_dt = today
@@ -125,16 +139,16 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     _store_info({
         "info": "After preparing from & to dates",
         "bank": doc.name,
-        "account": data.account,
+        "account": data["account"],
         "dates": dates,
-        "data": data.as_dict(convert_dates_to_str=True)
+        "data": data
     })
     for i in range(len(dates)):
         dt = dates.pop(0)
         if not queue_bank_transactions_sync(
             settings, client, doc.name, doc.bank, "Manual",
-            data.name, data.account, data.account_id,
-            data.account_currency, data.bank_account_ref,
+            data["row_name"], data["account"], data["account_id"],
+            data["account_currency"], data["bank_account_ref"],
             dt[0], dt[1], dt[2]
         ):
             err_dates.append([dt[0], dt[1]])
@@ -145,14 +159,14 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     _store_error({
         "error": "Error was raised while syncing bank account.",
         "bank": doc.name,
-        "account": data.account,
+        "account": data["account"],
         "dates": err_dates,
-        "data": data.as_dict(convert_dates_to_str=True)
+        "data": data
     })
     return {
         "error": (
             _("An error was raised while syncing account \"{0}\" of bank \"{1}\".")
-            .format(data.account, doc.name)
+            .format(data["account"], doc.name)
         )
     }
 
@@ -185,7 +199,7 @@ def get_dates_list(from_dt, to_dt):
 
 # [Schedule, Internal]
 def queue_bank_transactions_sync(
-    settings, client, bank, account_bank, trigger, account_name,
+    settings, client, bank, account_bank, trigger, row_name,
     account, account_id, account_currency, bank_account_ref,
     from_dt, to_dt, dt_diff=1
 ):
@@ -231,7 +245,7 @@ def queue_bank_transactions_sync(
             bank=bank,
             account_bank=account_bank,
             trigger=trigger,
-            account_name=account_name,
+            row_name=row_name,
             account=account,
             account_id=account_id,
             account_currency=account_currency,
@@ -245,14 +259,11 @@ def queue_bank_transactions_sync(
 
 # [Internal]
 def sync_bank_transactions(
-    settings, client, sync_id, bank, account_bank, trigger, account_name,
+    settings, client, sync_id, bank, account_bank, trigger, row_name,
     account, account_id, account_currency, bank_account_ref, from_dt, to_dt
 ):
     transactions = client.get_account_transactions(account_id, from_dt, to_dt)
     if transactions and "error" in transactions:
-        from .cache import del_cache
-        
-        del_cache(_SYNC_KEY_, account)
         return 0
     
     from .cache import set_cache
@@ -305,7 +316,7 @@ def sync_bank_transactions(
                 
                 values["balances"] = to_json(balances)
             
-            update_bank_account_data(account_name, values)
+            update_bank_account_data(row_name, values)
         
         add_sync_data(sync_id, bank, account, trigger, len(result.entries))
         del_cache(_SYNC_KEY_, account)

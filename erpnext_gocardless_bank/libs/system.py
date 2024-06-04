@@ -59,7 +59,7 @@ def get_client(company: str, doc=None):
         doc = settings()
     
     if not doc.is_enabled:
-        return {"error": app_disabled_message()}
+        return {"error": app_disabled_message(), "disabled": 1}
     
     row = None
     for v in doc.access:

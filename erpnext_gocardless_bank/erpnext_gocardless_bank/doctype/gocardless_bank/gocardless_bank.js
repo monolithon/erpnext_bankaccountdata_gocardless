@@ -229,8 +229,6 @@ frappe.ui.form.on('Gocardless Bank', {
                 country: country
             },
             function(ret) {
-                if (this.$isDataObj(ret) && ret.error)
-                    return this.error(ret.error);
                 if (!this.$isArr(ret)) {
                     this._error('Invalid banks list.', ret);
                     return this.error(__('Gocardless banks list received is invalid.'));
@@ -252,7 +250,7 @@ frappe.ui.form.on('Gocardless Bank', {
             },
             function(e) {
                 this._error('Failed to get banks list.', country, e.message);
-                this.error(__('Failed to get banks list from Gocardless.'));
+                this.error(e.self ? e.message : __('Failed to get banks list from Gocardless.'));
             }
         );
     },
@@ -539,17 +537,33 @@ frappe.gc_accounts = {
         return '<td scope="row">' + html + '</td>';
     },
     _render_balance(row) {
-        frappe.gc()._debug('Balances', row.balances);
-        if (!row.balances) return '<td></td>';
-        let list = frappe.gc().$parseJson(row.balances);
-        if (!frappe.gc().$isArrVal(list)) return '<td></td>';
-        let html = frappe.gc().$filter(frappe.gc().$map(list, function(v) {
-            if (!cint(v.reqd)) return null;
-            return format_currency(v.amount, v.currency);
-        })).join(' - ');
+        let html;
+        if (row.balances) {
+            let list = frappe.gc().$parseJson(row.balances);
+            if (!frappe.gc().$isArrVal(list)) return '<td></td>';
+            html = frappe.gc().$filter(frappe.gc().$map(list, function(v) {
+                if (!cint(v.reqd)) return null;
+                return this._balance_labels[v.type] + ': '
+                    + format_currency(v.amount, v.currency);
+            }, this));
+            if (html.length) {
+                html.reverse();
+                html = html.join('<br />');
+                html = html + '\
+            <span class="d-block w-100 small text-center text-muted gc-balance">\
+                ' + __('View All') + '\
+            </span>\
+                ';
+                
+            }
+        }
+        if (!html || !html.length) html = [
+            this._balance_labels.opening + ': N/A',
+            this._balance_labels.closing + ': N/A',
+        ].join('<br />');
         return '\
-        <td>\
-            <span class="gc-balance">' + html + '</span>\
+        <td class="small">\
+            ' + html + '\
         </td>\
         ';
     },
@@ -771,25 +785,22 @@ frappe.gc_accounts = {
             'enqueue_bank_transactions_sync',
             args,
             function(ret) {
-                if (this.$isDataObj(ret) && ret.error) {
-                    me._remove_spinner(null, $spinner);
-                    if (!ret.disabled) me._toggle_btn($el, false);
-                    else me._toggle_btns('action', false);
-                    this.error_(ret.error);
-                    return;
-                }
-                if (!ret) {
+                if (!this.$isDataObj(ret)) {
                     me._remove_spinner($el, $spinner);
                     this._error('Accounts: bank account sync failed');
                     return this.error_(__('Unable to sync the bank account "{0}".', [account]));
                 }
                 me._remove_spinner($el, $spinner);
                 this._log('Accounts: bank account sync success');
-                if (ret.info) this.info_(ret.info);
-                else this.success_(__('Bank account "{0}" is syncing in background', [account]));
+                this.success_(__('Bank account "{0}" is syncing in background', [account]));
             },
             function(e) {
-                me._remove_spinner($el, $spinner);
+                if (!e.self) me._remove_spinner($el, $spinner);
+                else {
+                    me._remove_spinner(null, $spinner);
+                    if (!e.disabled) me._toggle_btn($el, false);
+                    else me._toggle_btns('action', false);
+                }
                 this._error('Accounts: bank account sync error');
                 this.error_(e.self ? e.message : __('Unable to sync the bank account "{0}".', [account]));
             }
