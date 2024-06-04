@@ -53,7 +53,7 @@ def get_access_companies():
     return [v.company for v in doc.access]
 
 
-# [Bank, Bank Account, Bank Transaction]
+# [Bank, Bank Account, Bank Transaction, Schedule]
 def get_client(company: str, doc=None):
     if not doc:
         doc = settings()

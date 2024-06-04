@@ -35,16 +35,14 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         
         return {"error": app_disabled_message(), "disabled": 1}
     
-    from .cache import get_cache
-    
-    if get_cache(_SYNC_KEY_, account, True):
-        return {"info": _("Bank transactions sync is in progress.")}
-    
     from .bank import get_bank_doc
     
     doc = get_bank_doc(bank)
     if not doc:
-        return {"error": _("Gocardless bank \"{0}\" doesn't exist.").format(bank)}
+        return {"error": _("Bank \"{0}\" doesn't exist.").format(bank)}
+    
+    if not doc.auth_id:
+        return {"error": _("Bank \"{0}\" isn't authorized.").format(doc.name)}
     
     data = None
     for v in doc.bank_accounts:
@@ -53,7 +51,20 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
             break
     
     if not data:
-        return {"error": _("Bank account \"{0}\" doesn't belong to Gocardless bank \"{1}\".").format(account, bank)}
+        return {"error": _("Bank account \"{0}\" doesn't belong to bank \"{1}\".").format(account, doc.name)}
+    
+    if data.status != "Ready":
+        return {
+            "error": (
+                _("Bank account \"{0}\" of bank \"{1}\" isn't ready.")
+                .format(data.account, doc.name)
+            )
+        }
+    
+    from .cache import get_cache
+    
+    if get_cache(_SYNC_KEY_, data.account, True):
+        return {"success": 1}
     
     from .system import get_client
     
@@ -62,9 +73,9 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         client["disabled"] = 1
         return client
     
-    from .datetime import today_utc_date
+    from .datetime import today_date
     
-    today = today_utc_date()
+    today = today_date()
     _store_info({
         "info": "Before preparing from & to dates",
         "bank": doc.name,
@@ -73,127 +84,100 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         "to": to_dt,
         "data": data.as_dict(convert_dates_to_str=True)
     })
-    if from_dt:
-        from frappe.utils import cint
-        
-        from .datetime import (
-            reformat_date,
-            to_date_obj
-        )
-        
-        today_obj = to_date_obj(today)
-        from_dt = reformat_date(from_dt)
-        from_obj = to_date_obj(from_dt)
-        from_diff = today_obj - from_obj
-        from_diff = cint(from_diff.days)
-        if from_diff <= 0:
-            from_dt = None
-        else:
-            trans_days = cint(doc.transaction_days)
-            if trans_days and trans_days < from_diff:
-                from .datetime import add_date
-                
-                diff = from_diff - trans_days
-                from_dt = add_date(from_dt, days=diff, as_string=True)
-                from_obj = to_date_obj(from_dt)
-            
-            if not to_dt:
-                to_dt = from_dt
-            else:
-                to_dt = reformat_date(to_dt)
-                if to_dt != from_dt:
-                    to_obj = to_date_obj(to_dt)
-                    diff = to_obj - today_obj
-                    diff = cint(diff.days)
-                    if diff > 0:
-                        to_dt = today
-                    else:
-                        diff = to_obj - from_obj
-                        diff = cint(diff.days)
-                        if diff < 0:
-                            to_dt = from_dt
-    
     if not from_dt:
         from_dt = today
         to_dt = today
+    else:
+        from .datetime import (
+            reformat_date,
+            is_date_gt
+        )
+        
+        from_dt = reformat_date(from_dt)
+        if not is_date_gt(today, from_dt):
+            from_dt = today
+        # else:
+        #     from frappe.utils import cint
+            
+        #     trans_days = cint(doc.transaction_days)
+        #     if trans_days > 0:
+        #         from .datetime import dates_diff_days
+                
+        #         dif = dates_diff_days(from_dt, today)
+        #         if dif > trans_days:
+        #             from .datetime import add_date
+                    
+        #             dif = dif - trans_days
+        #             from_dt = add_date(from_dt, days=dif, as_string=True)
+        
+        if not to_dt:
+            to_dt = today
+        else:
+            to_dt = reformat_date(to_dt)
+            if to_dt != from_dt:
+                if is_date_gt(to_dt, today):
+                    to_dt = today
+                elif is_date_gt(from_dt, to_dt):
+                    to_dt = from_dt
     
-    if from_dt == to_dt:
-        _store_info({
-            "info": "After preparing from & to dates",
-            "bank": doc.name,
-            "account": data.account,
-            "from": from_dt,
-            "to": to_dt,
-            "data": data.as_dict(convert_dates_to_str=True)
-        })
+    err_dates = []
+    dates = get_dates_list(from_dt, to_dt)
+    _store_info({
+        "info": "After preparing from & to dates",
+        "bank": doc.name,
+        "account": data.account,
+        "dates": dates,
+        "data": data.as_dict(convert_dates_to_str=True)
+    })
+    for i in range(len(dates)):
+        dt = dates.pop(0)
         if not queue_bank_transactions_sync(
             settings, client, doc.name, doc.bank, "Manual",
             data.name, data.account, data.account_id,
             data.account_currency, data.bank_account_ref,
-            from_dt, to_dt, 1
+            dt[0], dt[1], dt[2]
         ):
-            return {
-                "error": _("An error was raised while syncing bank account \"{0}\" of Gocardless bank \"{1}\".")
-                    .format(data.account, doc.name)
-            }
-    else:
-        has_error = 0
-        dts = get_dates_list(from_dt, to_dt)
-        _store_info({
-            "info": "After preparing from & to dates",
-            "bank": doc.name,
-            "account": data.account,
-            "dates": dts,
-            "data": data.as_dict(convert_dates_to_str=True)
-        })
-        for dt in dts:
-            if not queue_bank_transactions_sync(
-                settings, client, doc.name, doc.bank, "Manual",
-                data.name, data.account, data.account_id,
-                data.account_currency, data.bank_account_ref,
-                dt[0], dt[1], dt[2]
-            ):
-                has_error += 1
-        
-        if has_error:
-            return {
-                "error": _("An error was raised while syncing bank account \"{0}\" of Gocardless bank \"{1}\".")
-                    .format(data.account, doc.name)
-            }
+            err_dates.append([dt[0], dt[1]])
     
-    return 1
+    if not err_dates:
+        return {"success": 1}
+    
+    _store_error({
+        "error": "Error was raised while syncing bank account.",
+        "bank": doc.name,
+        "account": data.account,
+        "dates": err_dates,
+        "data": data.as_dict(convert_dates_to_str=True)
+    })
+    return {
+        "error": (
+            _("An error was raised while syncing account \"{0}\" of bank \"{1}\".")
+            .format(data.account, doc.name)
+        )
+    }
 
 
 # [Internal]
 def get_dates_list(from_dt, to_dt):
-    from frappe.utils import cint
+    if from_dt == to_dt:
+        return [[from_dt, from_dt, 1]]
     
     from .datetime import (
-        to_date,
-        to_date_obj,
-        add_date
+        get_date_obj_range,
+        to_date
     )
     
-    from_obj = to_date_obj(from_dt)
-    to_obj = to_date_obj(to_dt)
-    delta = to_obj - from_obj
-    diff = cint(delta.days)
-    if diff == 1:
-        return [[from_dt, to_dt, 2]]
-    
-    last_date = from_obj
     ret = []
-    for i in range(diff):
-        fdt = to_date(last_date)
-        last_date = add_date(last_date, days=1)
-        if last_date > to_obj:
-            ret.append([fdt, fdt, 1])
+    dates = get_date_obj_range(from_dt, to_dt)
+    for i in range(len(dates)):
+        f = to_date(dates.pop(0))
+        if not dates:
+            ret.append([f, f, 1])
             break
         
-        tdt = to_date(last_date)
-        ret.append([fdt, tdt, 2])
-        last_date = add_date(last_date, days=1)
-        if last_date > to_obj:
+        t = to_date(dates.pop(0))
+        ret.append([f, t, 2])
+        if not dates:
             break
     
     return ret
@@ -205,10 +189,10 @@ def queue_bank_transactions_sync(
     account, account_id, account_currency, bank_account_ref,
     from_dt, to_dt, dt_diff=1
 ):
-    from .datetime import today_utc_date
+    from .datetime import today_date
     from .sync_log import get_sync_data
     
-    today = today_utc_date()
+    today = today_date()
     sync_data = get_sync_data(bank, account, today)
     if sync_data is None:
         _store_info({
@@ -346,7 +330,7 @@ def new_bank_transaction(
     result, settings, account_bank, account,
     account_currency, bank_account_ref, data, status
 ):
-    from .datetime import today_utc_datetime
+    from .datetime import today_datetime
     
     if "transaction_id" not in data:
         if settings.bank_transaction_without_id == "Ignore":
@@ -378,7 +362,7 @@ def new_bank_transaction(
             })
             return 0
         
-        data["date"] = today_utc_datetime()
+        data["date"] = today_datetime()
     
     if "amount" not in data:
         if settings.bank_transaction_without_amount == "Ignore":

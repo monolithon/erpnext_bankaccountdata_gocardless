@@ -6,37 +6,34 @@
 
 # [System]
 def update_access(row, client):
-    from .datetime import now_utc
-        
-    now = now_utc()
     if not row.access_token:
-        return access_connect(row, client, now)
+        return access_connect(row, client)
     
-    from .datetime import to_datetime_obj
+    from .datetime import is_now_datetime_gt
     
-    if to_datetime_obj(row.access_expiry) > now:
+    if not is_now_datetime_gt(row.access_expiry):
         return 0
     
-    if to_datetime_obj(row.refresh_expiry) > now:
-        return access_refresh(row, client, now)
+    if not is_now_datetime_gt(row.refresh_expiry):
+        return access_refresh(row, client)
     
-    return access_connect(row, client, now)
+    return access_connect(row, client)
 
 
 # [Internal]
-def access_connect(row, client, now):
+def access_connect(row, client):
     client.connect(row.secret_id, row.secret_key)
-    return update_access_data(row, client, now, True)
+    return update_access_data(row, client, True)
 
 
 # [Internal]
-def access_refresh(row, client, now):
+def access_refresh(row, client):
     client.refresh(row.refresh_token)
-    return update_access_data(row, client, now)
+    return update_access_data(row, client)
 
 
 # [Internal]
-def update_access_data(row, client, now, _all=False):
+def update_access_data(row, client, _all=False):
     data = client.get_token()
     if not data or not isinstance(data, dict):
         return -1
@@ -46,8 +43,9 @@ def update_access_data(row, client, now, _all=False):
     
     from frappe.utils import cint
     
-    from .datetime import add_datetime
+    from .datetime import now_obj, add_datetime
     
+    now = now_obj()
     if "refresh" in data:
         row.refresh_token = data["refresh"]
         row.refresh_expiry = add_datetime(

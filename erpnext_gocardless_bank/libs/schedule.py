@@ -23,7 +23,7 @@ def update_banks_status():
     if not is_enabled():
         return 0
     
-    from .datetime import today_utc_date
+    from .datetime import today_date
     
     dt = "Gocardless Bank"
     banks = frappe.get_all(
@@ -32,13 +32,13 @@ def update_banks_status():
         filters=[
             [dt, "auth_id", "!=", ""],
             [dt, "auth_status", "=", "Linked"],
-            [dt, "auth_expiry", "<", today_utc_date()]
+            [dt, "auth_expiry", "<", today_date()]
         ],
         pluck="name",
         ignore_permissions=True,
         strict=False
     )
-    if banks:
+    if banks and isinstance(banks, list):
         try:
             doc = frappe.qb.DocType(dt)
             (
@@ -54,7 +54,8 @@ def update_banks_status():
                     "error": "Unable to update bank auth status.",
                     "banks": banks,
                     "exception": str(exc)
-                }, _("Unable to update Gocardless bank auth status.")
+                },
+                _("Unable to update Gocardless bank auth status.")
             )
             return 0
         
@@ -63,9 +64,9 @@ def update_banks_status():
             (
                 frappe.qb.update(adoc)
                 .set(adoc.status, "Expired")
-                .where(adoc.parent.isin(banks))
                 .where(adoc.parenttype == dt)
                 .where(adoc.parentfield == "bank_accounts")
+                .where(adoc.parent.isin(banks))
             ).run()
         except Exception as exc:
             _store_error(
@@ -83,7 +84,7 @@ def update_banks_status():
 
 # [Internal]
 def sync_banks():
-    from .datetime import today_utc_date
+    from .datetime import today_date
     
     dt = "Gocardless Bank"
     banks = frappe.get_all(
@@ -94,20 +95,27 @@ def sync_banks():
             [dt, "auto_sync", "=", 1],
             [dt, "auth_id", "!=", ""],
             [dt, "auth_status", "=", "Linked"],
-            [dt, "auth_expiry", ">=", today_utc_date()]
+            [dt, "auth_expiry", ">=", today_date()]
         ],
         pluck="name",
         ignore_permissions=True,
         strict=False
     )
-    if banks:
-        for bank in banks:
-            sync_bank(bank, "Auto")
+    if not banks or not isinstance(banks, list):
+        return 0
+    
+    from .datetime import today_date
+    from .system import settings
+    
+    settings = settings()
+    today = today_date()
+    for i in range(len(banks)):
+        sync_bank(settings, banks.pop(0), today, "Auto")
 
 
 # [Internal]
-def sync_bank(name, trigger):
-    from frappe.utils import cint
+def sync_bank(settings, name, today, trigger):
+    # from frappe.utils import cint
     
     from .bank import get_bank_doc
     from .bank_transaction import (
@@ -117,52 +125,58 @@ def sync_bank(name, trigger):
     )
     from .cache import get_cache
     from .datetime import (
-        today_utc_date,
-        to_date_obj,
-        reformat_date
+        reformat_datetime,
+        is_date_gt
     )
-    from .system import settings, get_client
+    from .system import get_client
     
-    today = today_utc_date()
-    today_obj = None
     doc = get_bank_doc(name)
-    settings = settings()
-    client = get_client()
+    # trans_days = cint(doc.transaction_days)
+    client = get_client(doc.company, settings)
+    if isinstance(client, dict):
+        return 0
+    
     for v in doc.bank_accounts:
         if v.status != "Ready" or get_cache(_SYNC_KEY_, v.account, True):
             continue
         
-        if not v.last_sync:
-            dts = [[today, today, 1]]
-        else:
-            if not today_obj:
-                today_obj = to_date_obj(today)
-            
-            from_dt = reformat_date(v.last_sync)
-            from_obj = to_date_obj(from_dt)
-            diff = today_obj - from_obj
-            diff = cint(diff.days)
-            if diff <= 0:
-                dts = [[today, today, 1]]
-            elif diff == 1:
-                dts = [[from_dt, today, 2]]
-            else:
-                dts = get_dates_list(from_dt, today)
+        fdt = today
+        tdt = today
+        if v.last_sync:
+            fdt = reformat_datetime(v.last_sync)
+            fdt = fdt.split(" ")[0]
+            if not is_date_gt(today, fdt):
+                fdt = today
+            # elif trans_days > 0:
+            #     from .datetime import dates_diff_days
+                
+            #     dif = dates_diff_days(fdt, tdt)
+            #     if dif > trans_days:
+            #         from .datetime import add_date
+                    
+            #         dif = dif - trans_days
+            #         fdt = add_date(fdt, days=dif, as_string=True)
         
-        for dt in dts:
+        err_dates = []
+        dates = get_dates_list(fdt, tdt)
+        for i in range(len(dates)):
+            dt = dates.pop(0)
             if not queue_bank_transactions_sync(
                 settings, client, doc.name, doc.bank, trigger,
                 v.name, v.account, v.account_id, v.account_currency,
                 v.bank_account_ref, dt[0], dt[1], dt[2]
             ):
-                _store_error({
-                    "error": "An error was raised while syncing bank account.",
-                    "bank": name,
-                    "trigger": trigger,
-                    "from_dt": dt[0],
-                    "to_dt": dt[1],
-                    "data": v.as_dict(convert_dates_to_str=True)
-                })
+                err_dates.append([dt[0], dt[1]])
+        
+        if err_dates:
+            _store_error({
+                "error": "Error was raised in schedule while syncing bank account.",
+                "bank": doc.name,
+                "account": v.account,
+                "trigger": trigger,
+                "dates": err_dates,
+                "data": v.as_dict(convert_dates_to_str=True)
+            })
 
 
 # [Internal]
@@ -170,17 +184,18 @@ def update_bank_accounts_status():
     dt = "Gocardless Bank"
     banks = frappe.get_all(
         dt,
-        fields=["name"],
+        fields=["name", "company"],
         filters=[
             [dt, "auth_id", "!=", ""],
             [dt, "auth_status", "=", "Linked"]
         ],
-        pluck="name",
         ignore_permissions=True,
         strict=False
     )
-    if not banks:
+    if not banks or not isinstance(banks, list):
         return 0
+    
+    banks = {v["name"]:v["company"] for v in banks}
     
     adt = f"{dt} Account"
     accounts = frappe.get_all(
@@ -193,21 +208,36 @@ def update_bank_accounts_status():
             "status"
         ],
         filters=[
-            [adt, "parent", "in", banks],
+            [adt, "parent", "in", list(banks.keys())],
             [adt, "parenttype", "=", dt],
             [adt, "parentfield", "=", "bank_accounts"],
             [adt, "status", "!=", "Ready"]
         ]
     )
-    if not accounts:
+    if not accounts or not isinstance(accounts, list):
         return 0
     
     from .bank_account import update_bank_account_data
-    from .system import get_client
-            
-    client = get_client()
+    from .system import (
+        settings,
+        get_client
+    )
+    
+    settings = settings()
+    clients = {}
     for v in accounts:
-        data = client.get_account_data(v["account_id"])
+        p = v["parent"]
+        if p not in banks:
+            continue
+        
+        if p not in clients:
+            client = get_client(banks[p], settings)
+            if isinstance(client, dict):
+                continue
+            
+            clients[p] = client
+        
+        data = clients[p].get_account_data(v["account_id"])
         if not data or "error" in data:
             continue
         
