@@ -537,33 +537,28 @@ frappe.gc_accounts = {
         return '<td scope="row">' + html + '</td>';
     },
     _render_balance(row) {
-        let html;
+        let data = {};
         if (row.balances) {
             let list = frappe.gc().$parseJson(row.balances);
-            if (!frappe.gc().$isArrVal(list)) return '<td></td>';
-            html = frappe.gc().$filter(frappe.gc().$map(list, function(v) {
-                if (!cint(v.reqd)) return null;
-                return this._balance_labels[v.type] + ': '
-                    + format_currency(v.amount, v.currency);
-            }, this));
-            if (html.length) {
-                html.reverse();
-                html = html.join('<br />');
-                html = html + '\
-            <span class="d-block w-100 small text-center text-muted gc-balance">\
-                ' + __('View All') + '\
-            </span>\
-                ';
-                
-            }
+            if (frappe.gc().$isArrVal(list))
+                for (let i = 0, l = list.length, v; i < l; i++) {
+                    v = list[i];
+                    if (cint(v.reqd)) data[v.type] = format_currency(v.amount, v.currency);
+                }
         }
-        if (!html || !html.length) html = [
-            this._balance_labels.opening + ': N/A',
-            this._balance_labels.closing + ': N/A',
-        ].join('<br />');
         return '\
-        <td class="small">\
-            ' + html + '\
+        <td>\
+            <small class="d-block w-100 text-center">\
+                ' + Object.values(frappe.gc().$map({
+                    opening: this._balance_labels.opening,
+                    closing: this._balance_labels.closing,
+                }, function(v, k) {
+                    return v + ': ' + (data[k] != null ? data[k] : 'N/A');
+                })).join('<br />') + '\
+            </small>\
+            <small class="d-block w-100 text-center text-muted gc-balance">\
+                ' + __('View All') + '\
+            </small>\
         </td>\
         ';
     },
@@ -602,26 +597,31 @@ frappe.gc_accounts = {
             title: __('Account Balance'),
             content: function() {
                 let $el = $(this),
-                account = $el.parents('tr').attr('data-gc-account');
-                if (!frappe.gc().$isStrVal(account)) return '';
-                let row = me._get_bank_account(account);
-                if (!row) '';
-                let list = frappe.gc().$parseJson(row.balances);
-                if (!frappe.gc().$isArrVal(list)) return '';
-                list = frappe.gc().$map(list, function(v) {
-                    if (!cint(v.reqd)) return null;
-                    return '\
-            <tr>\
-                <td scope="row">' + __(me._balance_labels[v.type]) + '</td>\
-                <td class="text-center">' + format_currency(v.amount, v.currency) + '</td>\
-            </tr>\
-                    ';
-                });
+                account = $el.parents('tr').attr('data-gc-account'),
+                data = {};
+                if (frappe.gc().$isStrVal(account)) {
+                    let row = me._get_bank_account(account);
+                    if (row && row.balances) {
+                        let list = frappe.gc().$parseJson(row.balances);
+                        if (frappe.gc().$isArrVal(list))
+                            for (let i = 0, l = list.length, v; i < l; i++) {
+                                v = list[i];
+                                data[v.type] = format_currency(v.amount, v.currency);
+                            }
+                    }
+                }
                 return '\
 <div class="table-responsive m-0 p-0">\
     <table class="table table-sm table-borderless gc-table">\
         <tbody>\
-            ' + list.join('\n') + '\
+            ' + Object.values(frappe.gc().$map(me._balance_labels, function(v, k) {
+                    return '\
+            <tr>\
+                <td scope="row">' + v + '</td>\
+                <td class="text-center">' + (data[k] != null ? data[k] : 'N/A') + '</td>\
+            </tr>\
+                    ';
+            })).join('\n') + '\
         </tbody>\
     </table>\
 </div>\
