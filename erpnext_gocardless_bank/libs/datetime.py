@@ -145,9 +145,9 @@ def get_date_obj_range(fdt, tdt):
     if days <= 0:
         return [fdt]
     
-    from datetime import datetime
+    from datetime import timedelta
     
-    return [fdt + datetime.timedelta(days=x) for x in range(days + 1)]
+    return [fdt + timedelta(days=x) for x in range(days + 1)]
 
 
 # [Bank Transaction, Schedule]
