@@ -29,7 +29,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 time: 2 * 24 * 60 * 60,
             },
         };
-        frm.events.check_doc();
+        frm.events.check_doc(frm);
         if (!frm._bank.is_draft) return;
         frm._bank.init.setup = 1;
         frm.set_query('company', function(doc) {
@@ -45,11 +45,11 @@ frappe.ui.form.on('Gocardless Bank', {
         if (!frm._bank.is_draft) return;
         var key = 'company',
         val = cstr(frm.doc[key]);
-        if (!val.length) return frm.events.load_banks(frm, val);
+        if (!val.length) return frm.events.load_banks(frm);
         if (frm._bank.country[val]) {
             if (frm._bank.country[val] !== cstr(frm.doc.country))
                 frm.set_value('country', frm._bank.country[val]);
-            return frm.events.load_banks(frm, val);
+            return frm.events.load_banks(frm);
         }
         frappe.gc().request(
             'get_company_country',
@@ -58,7 +58,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 if (!this.$isStrVal(ret)) return;
                 frm._bank.country[val] = ret;
                 frm.set_value('country', ret);
-                frm.events.load_banks(frm, val);
+                frm.events.load_banks(frm);
             }
         );
     },
@@ -127,7 +127,7 @@ frappe.ui.form.on('Gocardless Bank', {
         frm._bank.is_submitted = !is_new && docstatus === 1;
     },
     check_status: function(frm) {
-        frm.events.check_doc();
+        frm.events.check_doc(frm);
         if (!frm._bank.init.setup) {
             frm._bank.init.setup = 1;
             frm.events.load_banks(frm);
@@ -234,8 +234,8 @@ frappe.ui.form.on('Gocardless Bank', {
         frm._bank.inits.sync && frm.events.setup_sync_data(frm, 1);
         frm.events.remove_toolbar(frm);
     },
-    load_banks: function(frm, country) {
-        if (!country) country = cstr(frm.doc.country);
+    load_banks: function(frm) {
+        let country = cstr(frm.doc.country);
         if (frm._bank.list.key === country) return;
         frm._bank.list.key = null;
         frm._bank.list.val = cstr(frm.doc.bank).length ? cstr(frm.doc.bank) : null;
