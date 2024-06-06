@@ -31,7 +31,7 @@ frappe.ui.form.on('Gocardless Bank', {
         };
         frm.events.check_doc(frm);
         if (!frm._bank.is_draft) return;
-        frm._bank.init.setup = 1;
+        frm._bank.inits.setup = 1;
         frm.set_query('company', function(doc) {
             return {query: frappe.gc().get_method('search_companies')};
         });
@@ -128,8 +128,8 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     check_status: function(frm) {
         frm.events.check_doc(frm);
-        if (!frm._bank.init.setup) {
-            frm._bank.init.setup = 1;
+        if (!frm._bank.inits.setup) {
+            frm._bank.inits.setup = 1;
             frm.events.load_banks(frm);
         }
         if (
@@ -142,8 +142,8 @@ frappe.ui.form.on('Gocardless Bank', {
                 && frappe.gc().$isStrVal(frm.doc.bank)
                 && frm.events.setup_toolbar(frm);
         }
-        if (!frm._bank.init.auth) {
-            frm._bank.init.auth++;
+        if (!frm._bank.inits.auth) {
+            frm._bank.inits.auth++;
             frappe.gc().real(
                 'reload_bank_accounts',
                 function(ret) {
@@ -160,7 +160,7 @@ frappe.ui.form.on('Gocardless Bank', {
             frm.events.remove_toolbar(frm);
             !frm._bank.inits.sync && frm.events.setup_sync_data(frm);
         }
-        !frm._bank.is_draft && frm._bank.init.auth && frm.events.load_accounts(frm);
+        !frm._bank.is_draft && frm._bank.inits.auth && frm.events.load_accounts(frm);
     },
     check_link: function(frm) {
         if (!frappe.gc().is_enabled) return;
