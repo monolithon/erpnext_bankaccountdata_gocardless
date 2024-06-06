@@ -111,6 +111,15 @@ frappe.ui.form.on('Gocardless Bank', {
         if (cint(frm.doc.transaction_days) < 1)
             frm.set_value('transaction_days', frappe.gc().transaction_days);
     },
+    before_submit: function(frm) {
+        if (
+            !frappe.gc().$isStrVal(frm.doc.auth_id)
+            || !frappe.gc().$isStrVal(frm.doc.auth_expiry)
+        ) {
+            frappe.gc().fatal(__('Bank must be authorized before being submitted.'));
+            return false;
+        }
+    },
     check_doc: function(frm) {
         let is_new = frm.is_new(),
         docstatus = !is_new ? cint(frm.doc.docstatus) : 0;
