@@ -10,13 +10,13 @@ from frappe import _
 
 # [G Bank, G Bank Form]
 @frappe.whitelist()
-def get_banks(company, country=None, pay_option=0):
+def get_banks(company, country=None, pay_option=0, cache_only=0):
     if (
         not company or not isinstance(company, str) or
         (country and not isinstance(country, str)) or
         (pay_option and not isinstance(pay_option, int))
     ):
-        return {"error": _("Data required to load Gocardless banks are invalid.")}
+        return {"error": _("Arguments required to load supported banks is invalid.")}
     
     if not country:
         from .company import get_company_country
@@ -52,6 +52,9 @@ def get_banks(company, country=None, pay_option=0):
     if isinstance(data, list):
         return data
     
+    if cache_only:
+        return None
+    
     from .system import get_client
     
     client = get_client(company)
@@ -77,14 +80,14 @@ def get_bank_link(company, bank_id, ref_id, transaction_days=0, docname=None):
         (docname and not isinstance(docname, str))
     ):
         _store_error({
-            "error": "Invalid Gocardless bank link args",
+            "error": "Invalid bank link data args",
             "company": company,
             "bank_id": bank_id,
             "ref_id": ref_id,
             "transaction_days": transaction_days,
             "docname": docname
         })
-        return {"error": _("Data required to get Gocardless bank link are invalid.")}
+        return {"error": _("Arguments required to get bank link data is invalid.")}
     
     from .system import get_client
     
@@ -103,21 +106,24 @@ def save_bank_link(name, auth_id, auth_expiry):
         not auth_id or not isinstance(auth_id, str) or
         not auth_expiry or not isinstance(auth_expiry, str)
     ):
-        return {"error": _("Data required to save Gocardless bank link are invalid.")}
+        return {"error": _("Arguments required to save bank link is invalid.")}
     
     doc = get_bank_doc(name)
     if not doc:
-        return {"error": _("Gocardless bank \"{0}\" doesn't exist.").format(name)}
+        return {"error": _("Bank \"{0}\" doesn't exist.").format(name)}
+    if doc._is_submitted:
+        return {"error": _("Bank \"{0}\" has already been submitted.").format(name)}
+    if doc._is_cancelled:
+        return {"error": _("Bank \"{0}\" has already been cancelled.").format(name)}
     
     doc.auth_id = auth_id
     doc.auth_expiry = auth_expiry
     doc.auth_status = "Linked"
     doc.save(ignore_permissions=True)
-    enqueue_save_bank(doc.name, doc.bank, doc.company, auth_id, doc.bank_ref)
     return 1
 
 
-# [Internal]
+# [G Bank]
 def enqueue_save_bank(name, bank, company, auth_id, bank_ref):
     from .background import is_job_running
     
@@ -148,15 +154,6 @@ def save_bank(name, bank, company, auth_id, bank_ref=None):
         
         status = store_bank_accounts(name, accounts)
         if status:
-            if not bank_ref:
-                ref = add_bank(bank, True)
-                if ref:
-                    doc = get_bank_doc(name)
-                    if doc:
-                        doc.bank_ref = ref
-                        doc.flags.update_bank_accounts = 1
-                        doc.save(ignore_permissions=True)
-            
             _emit_reload({
                 "name": name,
                 "bank": bank
@@ -171,8 +168,8 @@ def save_bank(name, bank, company, auth_id, bank_ref=None):
     return status
 
 
-# [G Bank, Internal]*
-def add_bank(bank: str, in_queue=False):
+# [G Bank]
+def add_bank(bank: str):
     dt = "Bank"
     if frappe.db.exists(dt, bank):
         return bank
@@ -195,11 +192,6 @@ def add_bank(bank: str, in_queue=False):
             "bank": bank,
             "exception": str(exc)
         })
-        if in_queue:
-            _emit_error({
-                "bank": bank,
-                "error": _("ERPNext: Unable to create bank \"{0}\".").format(bank)
-            })
         return None
 
 

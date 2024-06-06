@@ -37,7 +37,7 @@ frappe.ui.form.on('Bank Account', {
     gc_setup_form: function(frm) {
         frm._gc.setup = 1;
         frappe.gc()
-            .on('page_change page_pop', function() { frm && delete frm._gc; })
+            .on('page_change', function() { frm && delete frm._gc; })
             .on('ready change', function() {
                 if (frm._gc.enabled == null) frm._gc.enabled = this.is_enabled;
                 else if (frm._gc.enabled == this.is_enabled) return;

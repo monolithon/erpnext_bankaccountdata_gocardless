@@ -39,14 +39,16 @@
    "fieldname": "disabled",
    "fieldtype": "Check",
    "label": "Is Disabled",
-   "default": "0"
+   "default": "0",
+   "allow_on_submit": 1
   },
   {
    "fieldname": "auto_sync",
    "fieldtype": "Check",
    "label": "Auto Sync",
+   "hidden": 1,
    "read_only_depends_on": "eval:doc.disabled",
-   "depends_on": "eval:cstr(doc.auth_id).length > 0"
+   "allow_on_submit": 1
   },
   {
    "fieldname": "main_column",
@@ -56,8 +58,8 @@
    "fieldname": "sync_html",
    "fieldtype": "HTML",
    "label": "",
+   "hidden": 1,
    "read_only": 1,
-   "depends_on": "eval:cstr(doc.auth_id).length > 0",
    "print_hide": 1,
    "report_hide": 1
   },
@@ -72,8 +74,6 @@
    "options": "Company",
    "bold": 1,
    "reqd": 1,
-   "set_once": 1,
-   "read_only_depends_on": "eval:!doc.__islocal",
    "in_filter": 1,
    "in_standard_filter": 1,
    "in_list_view": 1,
@@ -91,7 +91,6 @@
    "bold": 1,
    "reqd": 1,
    "read_only": 1,
-   "set_once": 1,
    "ignore_user_permissions": 1
   },
   {
@@ -102,7 +101,7 @@
    "fieldname": "bank",
    "fieldtype": "Autocomplete",
    "label": "Bank",
-   "set_once": 1,
+   "reqd": 1,
    "bold": 1,
    "read_only_depends_on": "eval:!doc.__islocal || !doc.company",
    "mandatory_depends_on": "eval:doc.__islocal && doc.company",
@@ -134,7 +133,8 @@
    "default": "Unlinked",
    "depends_on": "eval:!doc.__islocal",
    "read_only": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "allow_on_submit": 1
   },
   
   {
@@ -159,7 +159,8 @@
    "hidden": 1,
    "print_hide": 1,
    "report_hide": 1,
-   "no_copy": 1
+   "no_copy": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "auth_expiry",
@@ -170,7 +171,8 @@
    "print_hide": 1,
    "report_hide": 1,
    "no_copy": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "bank_ref",
@@ -181,18 +183,21 @@
    "hidden": 1,
    "print_hide": 1,
    "report_hide": 1,
-   "ignore_user_permissions": 1
+   "ignore_user_permissions": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "bank_accounts",
    "fieldtype": "Table",
    "label": "Bank Accounts",
    "options": "Gocardless Bank Account",
-   "hidden": 1
+   "hidden": 1,
+   "allow_on_submit": 1
   }
  ],
  "icon": "fa fa-bank",
- "modified": "2024-05-31 04:04:04",
+ "is_submittable": 1,
+ "modified": "2024-06-05 04:04:04",
  "modified_by": "Administrator",
  "module": "ERPNext Gocardless Bank",
  "name": "Gocardless Bank",

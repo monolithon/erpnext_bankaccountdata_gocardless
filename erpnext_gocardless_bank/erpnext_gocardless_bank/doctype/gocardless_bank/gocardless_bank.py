@@ -19,15 +19,32 @@ class GocardlessBank(Document):
     
     def before_validate(self):
         self._check_app_status()
-        self._set_defaults()
+        if self.is_new() or self._is_draft:
+            self._set_defaults()
     
     
     def validate(self):
         self._check_app_status()
-        if self.is_new():
-            self._validate_new_data()
-        else:
-            self._validate_old_data()
+        if self.is_new() or self._is_draft:
+            if not self.company:
+                self._error(_("A valid company is required."))
+            if not self.country:
+                self._error(_("Company \"{0}\" doesn't have a valid country.").format(self.company))
+            if not self.bank:
+                self._error(_("A valid bank is required."))
+            if not self.bank_id:
+                self._error(_("Bank id for selected bank isn't found."))
+            if (
+                not self.is_new() and
+                self.has_value_changed("bank") and
+                self.auth_id and
+                (
+                    not self.has_value_changed("auth_id") or
+                    not self.has_value_changed("auth_expiry")
+                )
+            ):
+                self.auth_id = None
+                self.auth_expiry = None
     
     
     def before_rename(self, olddn, newdn, merge=False):
@@ -42,15 +59,25 @@ class GocardlessBank(Document):
     def before_save(self):
         self._check_app_status()
         clear_doc_cache(self.doctype, self.name)
-        if (
-            not self.bank_ref and self.bank and not self.is_new() and
-            not self.flags.get("update_bank_accounts", 0)
-        ):
+    
+    
+    def before_submit(self):
+        self._check_app_status()
+        if not self.auth_id or not self.auth_expiry:
+            self._error(_("Bank must be authorized before being submitted."))
+        
+        clear_doc_cache(self.doctype, self.name)
+        if self.auth_status != "Linked":
+            self.auth_status = "Linked"
+        if not self.bank_ref:
             from erpnext_gocardless_bank.libs import add_bank
             
             ref = add_bank(self.bank)
             if ref:
+                from erpnext_gocardless_bank.libs import enqueue_save_bank
+                
                 self.bank_ref = ref
+                enqueue_save_bank(self.name, self.bank, self.company, self.auth_id, self.bank_ref)
             else:
                 self._error(_("ERPNext: Unable to create bank \"{0}\".").format(self.bank))
     
@@ -59,8 +86,30 @@ class GocardlessBank(Document):
         self._clean_flags()
     
     
+    def before_update_after_submit(self):
+        self._check_app_status()
+        clear_doc_cache(self.doctype, self.name)
+    
+    
+    def on_update_after_submit(self):
+        self._clean_flags()
+    
+    
+    def before_cancel(self):
+        self._check_app_status()
+        clear_doc_cache(self.doctype, self.name)
+    
+    
+    def on_cancel(self):
+        self._clean_flags()
+    
+    
     def on_trash(self):
         self._check_app_status()
+        if self._is_submitted:
+            self._error(_("Submitted bank can't be removed."))
+        
+        clear_doc_cache(self.doctype, self.name)
         
         from erpnext_gocardless_bank.libs import enqueue_bank_trash
         
@@ -68,23 +117,42 @@ class GocardlessBank(Document):
     
     
     def after_delete(self):
-        clear_doc_cache(self.doctype, self.name)
         self._clean_flags()
+    
+    
+    @property
+    def _is_draft(self):
+        return cint(self.docstatus) == 0
+    
+    
+    @property
+    def _is_submitted(self):
+        return cint(self.docstatus) == 1
+    
+    
+    @property
+    def _is_cancelled(self):
+        return cint(self.docstatus) == 2
     
     
     def _set_defaults(self):
         if self.company:
-            from erpnext_gocardless_bank.libs import get_company_country
+            if self.is_new() or self.has_value_changed("company"):
+                from erpnext_gocardless_bank.libs import get_company_country
+                
+                country = get_company_country(self.company)
+                if not country and self.country:
+                    self.country = None
+                elif country and (not self.country or self.country != country):
+                    self.country = country
             
-            country = get_company_country(self.company)
-            if not country and self.country:
-                self.country = None
-            elif country and (not self.country or self.country != country):
-                self.country = country
-            
-            if not self.bank_id and self.bank and self.country:
+            if (
+                self.bank and self.country and
+                (not self.bank_id or self.has_value_changed("bank"))
+            ):
                 from erpnext_gocardless_bank.libs import get_banks
                 
+                self.bank_id = None
                 banks = get_banks(self.company, self.country)
                 if banks and isinstance(banks, list):
                     for v in banks:
@@ -98,41 +166,6 @@ class GocardlessBank(Document):
             self.transaction_days = 180
     
     
-    def _validate_new_data(self):
-        if not self.company:
-            self._error(_("A valid company is required."))
-        if not self.country:
-            self._error(_("Company \"{0}\" doesn't have a valid country.").format(self.company))
-        if not self.bank:
-            self._error(_("A valid bank is required."))
-        if not self.bank_id:
-            self._error(_("Bank id for selected bank isn't found."))
-    
-    
-    def _validate_old_data(self):
-        doc = self.get_doc_before_save()
-        if not doc:
-            self.load_doc_before_save()
-            doc = self.get_doc_before_save()
-            if not doc:
-                self._error(_("Unable to load data before save."))
-        
-        keys = [
-            "company",
-            "country",
-            "bank",
-            "bank_id",
-            "transaction_days"
-        ]
-        for i in range(len(keys)):
-            k = keys.pop(0)
-            if (
-                (i < 4 and (doc.get(k, "") != self.get(k, "") or not self.get(k, ""))) or
-                (i == 4 and (cint(doc.get(k, 0)) != cint(self.get(k, 0)) or cint(self.get(k, 0)) < 1))
-            ):
-                self._error(_("Set once data has been modified."))
-    
-    
     def _check_app_status(self):
         if not self.flags.get("status_checked", 0):
             from erpnext_gocardless_bank.libs import check_app_status
@@ -143,7 +176,6 @@ class GocardlessBank(Document):
     
     def _clean_flags(self):
         keys = [
-            "update_bank_accounts",
             "status_checked"
         ]
         for i in range(len(keys)):
