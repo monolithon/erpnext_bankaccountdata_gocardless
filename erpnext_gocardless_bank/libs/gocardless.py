@@ -13,6 +13,8 @@ from frappe.utils import (
     cint
 )
 
+from erpnext_gocardless_bank import __production__
+
 from .api import Api
 
 
@@ -24,6 +26,11 @@ class Gocardless:
     def __init__(self):
         self.access = None
         self.token = None
+    
+    
+    @property
+    def is_debug(self):
+        return 0 if __production__ else 1
     
     
     # [Access]
@@ -142,6 +149,14 @@ class Gocardless:
             for k in v:
                 if k not in keys:
                     del v[k]
+        
+        if self.is_debug:
+            t = {
+                "id": "SANDBOXFINANCE_SFIN0000",
+                "name": "Testing Sandbox Finance"
+            }
+            t[keys[2]] = self._def_transaction_days
+            data.append(t)
         
         return data
     

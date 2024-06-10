@@ -210,17 +210,11 @@ frappe.ui.form.on('Gocardless Bank', {
                     this._error('Invalid banks list.', key, ret);
                     return this.error(__('Gocardless banks list received is invalid.'));
                 }
-                if (!this.is_debug && !ret.length) {
+                if (!ret.length) {
                     if (init) return frappe.gc_banks.reset(frm);
                     this._error('Empty banks list.', ret);
                     return this.error(__('Gocardless banks list received is empty.'));
                 }
-                
-                this.is_debug && ret.unshift({
-                    id: 'SANDBOXFINANCE_SFIN0000',
-                    name: 'Testing Sandbox Finance'
-                });
-                
                 frappe.gc_banks.store(key, ret);
                 frappe.gc_banks.update(key, ret);
             },

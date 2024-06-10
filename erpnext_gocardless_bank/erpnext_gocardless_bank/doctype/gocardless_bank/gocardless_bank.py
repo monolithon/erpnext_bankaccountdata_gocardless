@@ -173,13 +173,6 @@ class GocardlessBank(Document):
                 self.flags.bank_validate_error = 1
                 return self._reset_bank()
             
-            from erpnext_gocardless_bank.libs.common import store_info
-            
-            store_info({
-                "info": "List of supported banks",
-                "bank": self.bank,
-                "data": banks.copy()
-            })
             for i in range(len(banks)):
                 v = banks.pop(0)
                 if v["name"] == self.bank:
