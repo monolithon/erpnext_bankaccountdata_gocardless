@@ -23,79 +23,95 @@ class GocardlessSettings(Document):
         
         clear_doc_cache(self.doctype)
         if self.has_value_changed("enabled"):
-            self.flags.emit_change = True
+            self.flags.emit_change = 1
     
     
     def on_update(self):
-        if self.flags.pop("emit_change", False):
+        if self.flags.get("emit_change", 0):
             from erpnext_gocardless_bank import __production__
             
             from erpnext_gocardless_bank.libs import emit_status_changed
-        
+            
             emit_status_changed({
-                "is_enabled": 1 if self.is_enabled else 0,
+                "is_enabled": 1 if self._is_enabled else 0,
                 "is_debug": 0 if __production__ else 1
             })
+        
+        self._clean_flags()
     
     
     @property
-    def is_enabled(self):
+    def _is_enabled(self):
         return cint(self.enabled) > 0
     
     
     @property
-    def clean_bank(self):
+    def _clean_bank(self):
         return cint(self.clean_bank_dt) > 0
     
     
     @property
-    def clean_bank_account(self):
+    def _clean_bank_account(self):
         return cint(self.clean_bank_account_dt) > 0
     
     
     @property
-    def clean_bank_transaction(self):
+    def _clean_bank_transaction(self):
         return cint(self.clean_bank_transaction_dt) > 0
     
     
     @property
-    def clean_currency(self):
+    def _clean_currency(self):
         return cint(self.clean_currency_dt) > 0
     
     
     @property
-    def clean_supplier(self):
+    def _clean_supplier(self):
         return cint(self.clean_supplier_dt) > 0
     
     
     @property
-    def clean_customer(self):
+    def _clean_customer(self):
         return cint(self.clean_customer_dt) > 0
     
     
     def _set_defaults(self):
-        if self.clean_bank:
-            if not self.clean_bank_account:
-                self.clean_bank_account_dt = 1
-            if not self.clean_bank_transaction:
-                self.clean_bank_transaction_dt = 1
-        
         ign = "Ignore"
+        if self.supplier_exist_in_transaction == ign:
+            if self.supplier_in_transaction_doesnt_exist != ign:
+                self.supplier_in_transaction_doesnt_exist = ign
+            if self.supplier_bank_account_exist_in_transaction != ign:
+                self.supplier_bank_account_exist_in_transaction = ign
+        
+        if self.customer_exist_in_transaction == ign:
+            if self.customer_in_transaction_doesnt_exist != ign:
+                self.customer_in_transaction_doesnt_exist = ign
+            if self.customer_bank_account_exist_in_transaction != ign:
+                self.customer_bank_account_exist_in_transaction = ign
+        
+        if self._clean_bank and not self._clean_bank_account:
+            self.clean_bank_account_dt = 1
+        
+        if self._clean_bank_account and not self._clean_bank_transaction:
+            self.clean_bank_transaction_dt = 1
+        
         if (
-            self.clean_currency and
+            self._clean_currency and
             self.bank_account_currency_doesnt_exist == ign and
             self.bank_transaction_currency_doesnt_exist == ign
         ):
             self.clean_currency_dt = 0
+        
         if (
-            self.clean_supplier and (
+            self._clean_supplier and (
                 self.supplier_exist_in_transaction == ign or
                 self.supplier_in_transaction_doesnt_exist == ign
             )
         ):
             self.clean_supplier_dt = 0
+        
         if (
-            self.clean_customer and (
+            self._clean_customer and (
                 self.customer_exist_in_transaction == ign or
                 self.customer_in_transaction_doesnt_exist == ign
             )
@@ -123,20 +139,49 @@ class GocardlessSettings(Document):
         )
         for i, v in enumerate(self.access):
             if not v.company:
-                self._error(_("{0} - #{1}: A valid company is required.").format(table, i + 1))
-            if v.company not in exist:
-                self._error(_("{0} - #{1}: Company \"{2}\" is a group or doesn't exist.").format(table, i + 1, v.company))
+                self._add_error(_("{0} - #{1}: A valid company is required.").format(table, i + 1))
+            elif v.company not in exist:
+                self._add_error(_("{0} - #{1}: Company \"{2}\" is a group or doesn't exist.").format(table, i + 1, v.company))
             if not v.secret_id:
-                self._error(_("{0} - #{1}: A valid secret id is required.").format(table, i + 1))
-            if not is_valid_secret_id(v.secret_id):
+                self._add_error(_("{0} - #{1}: A valid secret id is required.").format(table, i + 1))
+            elif not is_valid_secret_id(v.secret_id):
                 self._error(_("{0} - #{1}: Secret id is invalid.").format(table, i + 1))
             if not v.secret_key:
-                self._error(_("{0} - #{1}: A valid secret key is required.").format(table, i + 1))
-            if not is_valid_secret_key(v.secret_key):
-                self._error(_("{0} - #{1}: Secret key is invalid.").format(table, i + 1))
+                self._add_error(_("{0} - #{1}: A valid secret key is required.").format(table, i + 1))
+            elif not is_valid_secret_key(v.secret_key):
+                self._add_error(_("{0} - #{1}: Secret key is invalid.").format(table, i + 1))
+        
+        self._throw_errors()
+    
+    
+    def _clean_flags(self):
+        keys = [
+            "error_list",
+            "emit_change"
+        ]
+        for i in range(len(keys)):
+            self.flags.pop(keys.pop(0), None)
+    
+    
+    def _add_error(self, msg):
+        if not self.flags.get("error_list", 0):
+            self.flags.error_list = []
+        self.flags.error_list.append(msg)
+    
+    
+    def _throw_errors(self):
+        if self.flags.get("error_list", 0):
+            msg = self.flags.error_list
+            if len(msg) == 1:
+                msg = msg.pop(0)
+            else:
+                msg = msg.copy()
+            
+            self._error(msg)
     
     
     def _error(self, msg):
         from erpnext_gocardless_bank.libs import error
         
+        self._clean_flags()
         error(msg, _(self.doctype))

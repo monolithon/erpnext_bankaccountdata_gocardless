@@ -22,7 +22,7 @@ def del_cache(dt: str, key: str):
     frappe.cache().delete_key(f"{dt}-{key}")
 
 
-# [Bank, Bank Account, System, Internal]
+# [Bank, System, Internal]
 def get_cached_doc(dt: str, name: str=None, for_update: bool=False):
     if name is None:
         name = dt

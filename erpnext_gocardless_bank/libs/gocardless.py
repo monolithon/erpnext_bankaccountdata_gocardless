@@ -17,6 +17,10 @@ from .api import Api
 
 
 class Gocardless:
+    _def_transaction_days = 90
+    _def_access_valid_days = 180
+    
+    
     def __init__(self):
         self.access = None
         self.token = None
@@ -119,23 +123,23 @@ class Gocardless:
                 self._log_error(_("Gocardless banks list received is invalid."))
                 return None
         
-        for v in data:
+        for i in range(len(data)):
+            v = data[i]
             v.pop("countries", 0)
-            if cint(v.get("transaction_total_days", "")) < 1:
+            if cint(v.get("transaction_total_days", 0)) < 1:
                 v["transaction_total_days"] = 90
         
         return data
     
     
-    def get_bank_agreement(self, bank_id: str, transaction_days: int|None=None):
-        transaction_days = cint(transaction_days)
-        if transaction_days < 1:
-            transaction_days = 90
+    def get_bank_agreement(self, bank_id: str, transaction_days: int=None):
+        if not transaction_days or cint(transaction_days) < 1:
+            transaction_days = self._def_transaction_days
         
         data = self._send(Api.bank_agreement, {
             "institution_id": bank_id,
             "max_historical_days": transaction_days,
-            "access_valid_for_days": 180,
+            "access_valid_for_days": self._def_access_valid_days,
             "access_scope": ["balances", "details", "transactions"]
         })
         if data is None or "error" in data:
@@ -151,43 +155,35 @@ class Gocardless:
             self._log_error(_("Gocardless bank agreement data received for bank id ({0}) is invalid.").format(bank_id))
             return None
         
-        if "access_valid_for_days" not in data:
-            self._store_info({"info": "Bank agreement data received is missing access valid days value.", "data": data})
-            data["access_valid_for_days"] = 180
+        if "access_valid_for_days" in data:
+            data["access_valid_for_days"] = cint(data["access_valid_for_days"])
+        
+        if cint(data.get("access_valid_for_days", 0)) < 1:
+            self._store_info({
+                "info": "Bank agreement data received is missing or has invalid access valid days value.",
+                "data": data
+            })
+            data["access_valid_for_days"] = self._def_access_valid_days
         
         return data
     
     
-    def get_bank_link(
-        self, bank_id: str, ref_id: str, transaction_days: int|None=None,
-        docname: str|None=None
-    ):
-        agree = self.get_bank_agreement(bank_id, transaction_days)
-        if agree is None or "error" in agree:
-            return agree
-        
-        lang = "en"
-        try:
-            lang = frappe.lang
-        except Exception:
-            try:
-                lang = frappe.local.lang
-            except Exception:
-                lang = "en"
+    def get_bank_link(self, docname: str, ref_id: str, bank_id: str, transaction_days: int=None):
+        agreement = self.get_bank_agreement(bank_id, transaction_days)
+        if not isinstance(agreement, dict) or "error" in agreement:
+            return agreement
         
         redirect_url = get_request_site_address(True)
-        redirect_url = f"{redirect_url}/app/gocardless-bank"
-        if docname:
-            redirect_url = f"{redirect_url}/{docname}"
+        redirect_url = f"{redirect_url}/app/gocardless-bank/{docname}"
         
         data = self._send(
             Api.bank_link,
             {
-                "institution_id": bank_id,
-                "redirect": redirect_url,
                 "reference": ref_id,
-                "agreement": str(agree["id"]),
-                "user_language": str(lang).upper(),
+                "institution_id": bank_id,
+                "agreement": agreement["id"],
+                "redirect": redirect_url,
+                "user_language": self._user_lang()
             }
         )
         if data is None or "error" in data:
@@ -203,7 +199,9 @@ class Gocardless:
             self._log_error(_("Gocardless bank link data received for bank id ({0}) is invalid.").format(bank_id))
             return None
         
-        data["access_valid_for_days"] = agree["access_valid_for_days"]
+        data["auth_id"] = data.pop("id")
+        data["auth_link"] = data.pop("link")
+        data["auth_expiry"] = agreement["access_valid_for_days"]
         return data
     
     
@@ -516,6 +514,22 @@ class Gocardless:
         self._log_error(err)
         if raw:
             self._store_error({"error": err, "data": raw})
+    
+    
+    @staticmethod
+    def _user_lang():
+        try:
+            lang = cstr(frappe.lang)
+        except Exception:
+            try:
+                lang = cstr(frappe.local.lang)
+            except Exception:
+                lang = None
+        
+        if not lang:
+            lang = "en"
+        
+        return lang.upper()
     
     
     @staticmethod

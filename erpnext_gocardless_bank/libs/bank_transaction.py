@@ -30,7 +30,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     from .system import settings
     
     settings = settings()
-    if not settings.is_enabled:
+    if not settings._is_enabled:
         from .system import app_disabled_message
         
         return {"error": app_disabled_message(), "disabled": 1}
@@ -41,7 +41,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     if not doc:
         return {"error": _("Bank \"{0}\" doesn't exist.").format(bank)}
     
-    if not doc.auth_id:
+    if not doc._is_submitted or not doc._is_auth:
         return {"error": _("Bank \"{0}\" isn't authorized.").format(doc.name)}
     
     data = None

@@ -49,7 +49,7 @@ def get_banks(company, country=None, pay_option=0, cache_only=0):
         key = f"{key}-pay"
     
     data = get_cache(dt, key, True)
-    if isinstance(data, list):
+    if data and isinstance(data, list):
         return data
     
     if cache_only:
@@ -72,20 +72,20 @@ def get_banks(company, country=None, pay_option=0, cache_only=0):
 
 # [G JS]
 @frappe.whitelist(methods=["POST"])
-def get_bank_link(company, bank_id, ref_id, transaction_days=0, docname=None):
+def get_bank_auth(name, ref_id, company, bank_id, transaction_days=0):
     if (
-        not company or not isinstance(company, str) or
-        not bank_id or not isinstance(bank_id, str) or
+        not name or not isinstance(name, str) or
         not ref_id or not isinstance(ref_id, str) or
-        (docname and not isinstance(docname, str))
+        not company or not isinstance(company, str) or
+        not bank_id or not isinstance(bank_id, str)
     ):
         _store_error({
             "error": "Invalid bank link data args",
+            "name": name,
+            "ref_id": ref_id,
             "company": company,
             "bank_id": bank_id,
-            "ref_id": ref_id,
-            "transaction_days": transaction_days,
-            "docname": docname
+            "transaction_days": transaction_days
         })
         return {"error": _("Arguments required to get bank link data is invalid.")}
     
@@ -95,26 +95,28 @@ def get_bank_link(company, bank_id, ref_id, transaction_days=0, docname=None):
     if isinstance(client, dict):
         return client
     
-    return client.get_bank_link(bank_id, ref_id, transaction_days, docname)
+    return client.get_bank_link(name, ref_id, bank_id, transaction_days)
 
 
-# [G Bank List, G Bank Form]
+# [G JS]
 @frappe.whitelist(methods=["POST"])
-def save_bank_link(name, auth_id, auth_expiry):
+def save_bank_auth(name, bank, bank_id, auth_id, auth_expiry):
     if (
         not name or not isinstance(name, str) or
+        not bank or not isinstance(bank, str) or
+        not bank_id or not isinstance(bank_id, str) or
         not auth_id or not isinstance(auth_id, str) or
         not auth_expiry or not isinstance(auth_expiry, str)
     ):
-        return {"error": _("Arguments required to save bank link is invalid.")}
+        return {"error": _("Arguments required for saving bank authorization are invalid.")}
     
     doc = get_bank_doc(name)
     if not doc:
         return {"error": _("Bank \"{0}\" doesn't exist.").format(name)}
-    if doc._is_submitted:
-        return {"error": _("Bank \"{0}\" has already been submitted.").format(name)}
-    if doc._is_cancelled:
-        return {"error": _("Bank \"{0}\" has already been cancelled.").format(name)}
+    if not doc._is_submitted:
+        return {"error": _("Bank \"{0}\" can't be authorized before being submitted.").format(name)}
+    if doc.bank != bank or doc.bank_id != bank_id:
+        return {"error": _("Authorization data for \"{0}\" is invalid.").format(name)}
     
     doc.auth_id = auth_id
     doc.auth_expiry = auth_expiry
@@ -124,27 +126,26 @@ def save_bank_link(name, auth_id, auth_expiry):
 
 
 # [G Bank]
-def enqueue_save_bank(name, bank, company, auth_id, bank_ref):
+def enqueue_sync_bank(name, bank, company, auth_id):
     from .background import is_job_running
     
-    job_id = f"gocardless-save-bank-{bank}"
+    job_id = f"gocardless-sync-bank-{bank}"
     if not is_job_running(job_id):
         from .background import enqueue_job
         
         enqueue_job(
-            "erpnext_gocardless_bank.libs.bank.save_bank",
+            "erpnext_gocardless_bank.libs.bank.sync_bank",
             job_id,
             timeout=30000,
             name=name,
             bank=bank,
             company=company,
-            auth_id=auth_id,
-            bank_ref=bank_ref
+            auth_id=auth_id
         )
 
 
 # [Internal]*
-def save_bank(name, bank, company, auth_id, bank_ref=None):
+def sync_bank(name, bank, company, auth_id):
     from .bank_account import get_client_bank_accounts
     
     status = 0
@@ -152,7 +153,7 @@ def save_bank(name, bank, company, auth_id, bank_ref=None):
     if accounts:
         from .bank_account import store_bank_accounts
         
-        status = store_bank_accounts(name, accounts)
+        status = store_bank_accounts(get_bank_doc(name), accounts)
         if status:
             _emit_reload({
                 "name": name,
@@ -162,7 +163,7 @@ def save_bank(name, bank, company, auth_id, bank_ref=None):
             _emit_error({
                 "name": name,
                 "bank": bank,
-                "error": _("Unable to create or update bank accounts of bank \"{0}\".").format(bank)
+                "error": _("Unable to sync bank accounts of bank \"{0}\".").format(name)
             })
     
     return status
@@ -188,14 +189,14 @@ def add_bank(bank: str):
         return bank
     except Exception as exc:
         _store_error({
-            "error": "Unable to add new bank.",
+            "error": "Unable to add bank to ERPNext.",
             "bank": bank,
             "exception": str(exc)
         })
         return None
 
 
-# [Bank Transaction, Internal]
+# [Bank Account, Bank Transaction, Internal]
 def get_bank_doc(name):
     from .cache import get_cached_doc
     

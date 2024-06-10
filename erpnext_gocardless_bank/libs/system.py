@@ -8,7 +8,7 @@ import frappe
 from frappe import _
 
 
-# [Bank, Bank Account, Bank Transaction, Company, Schedule, Internal]
+# [Bank Account, Bank Transaction, Company, Schedule, Internal]
 def settings():
     from .cache import get_cached_doc
     
@@ -17,7 +17,7 @@ def settings():
 
 # [Bank Account, Schedule, Internal]
 def is_enabled():
-    return settings().is_enabled
+    return settings()._is_enabled
 
 
 # [Gocardless JS]
@@ -27,7 +27,7 @@ def get_settings():
     
     doc = settings()
     return {
-        "is_enabled": 1 if doc.is_enabled else 0,
+        "is_enabled": 1 if doc._is_enabled else 0,
         "prod": 1 if __production__ else 0
     }
 
@@ -58,7 +58,7 @@ def get_client(company: str, doc=None):
     if not doc:
         doc = settings()
     
-    if not doc.is_enabled:
+    if not doc._is_enabled:
         return {"error": app_disabled_message(), "disabled": 1}
     
     row = None

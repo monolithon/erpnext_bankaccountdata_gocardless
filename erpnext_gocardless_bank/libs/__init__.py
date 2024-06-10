@@ -6,9 +6,10 @@
 
 from .bank import (
     get_banks,
-    get_bank_link,
-    save_bank_link,
-    add_bank
+    get_bank_auth,
+    save_bank_auth,
+    add_bank,
+    enqueue_sync_bank
 )
 from .bank_account import (
     store_bank_account,

@@ -963,7 +963,6 @@
                 is_enabled: 0,
                 transaction_days: 90,
             });
-            this._bank_link = {};
             this.request(
                 'get_settings', null, this._init,
                 function() { this._error('Getting settings failed.'); }
@@ -980,57 +979,73 @@
             })
             .emit('ready');
         }
-        connect_to_bank(company, id, transaction_days, docname, success, error) {
-            transaction_days = cint(transaction_days);
-            if (transaction_days < 1) transaction_days = this._transaction_days;
-            if (!this.$isStrVal(docname)) docname = null;
+        get_auth(docname, company, bank_id, transaction_days, success, error) {
             success = this.$fn(success);
-            error = this.$fn(error);
+            if (!success) return this;
             
-            var key = [company, id, transaction_days];
-            if (docname) key.push(docname);
-            key = key.join('-');
-            if (this._bank_link[key]) {
-                let data = this._bank_link[key];
-                success && success(
-                    data.link,
+            var key = 'bank_link_' + [docname, company, bank_id].join('-');
+            if (this.cache().has(key)) {
+                let data = this.cache().pop(key);
+                success(
                     data.ref_id,
-                    data.id,
-                    data.access_valid_for_days
+                    data.auth_id,
+                    data.auth_expiry,
+                    data.auth_link
                 );
-                return;
+                return this;
             }
             
-            var ref_id = '_' + Math.random().toString(36).substr(2);
-            let args = {
-                company: company,
-                bank_id: id,
-                ref_id: ref_id,
-                transaction_days: transaction_days,
-            };
-            if (docname) args.docname = docname;
-            this.request(
-                'get_bank_link', args,
+            var ref_id = '_' + frappe.utils.get_random(32);
+            transaction_days = cint(transaction_days);
+            if (transaction_days < 1) transaction_days = this._transaction_days;
+            error = this.$fn(error);
+            
+            return this.request(
+                'get_bank_auth',
+                {
+                    name: docname,
+                    ref_id: ref_id,
+                    company: company,
+                    bank_id: bank_id,
+                    transaction_days: transaction_days
+                },
                 function(ret) {
                     if (!this.$isDataObj(ret))
                         return this.error(__('Bank link data received is invalid.'));
                     
-                    ret.access_valid_for_days = cint(ret.access_valid_for_days);
-                    if (ret.access_valid_for_days < 1) ret.access_valid_for_days = 180;
                     ret.ref_id = ref_id;
-                    this._bank_link[key] = ret;
-                    success && success(
-                        ret.link,
+                    ret.auth_expiry = cint(ret.auth_expiry);
+                    this.cache().set(key, ret, 3 * 60 * 60);
+                    success(
                         ret.ref_id,
-                        ret.id,
-                        ret.access_valid_for_days
+                        ret.auth_id,
+                        ret.auth_expiry,
+                        ret.auth_link
                     );
                 },
                 function(e) {
-                    if (error) error(e);
-                    else this.error(e.self ? e.message : __('Unable to get Gocardless bank link data.'));
+                    error ? error(e) : this.error(e.self ? e.message : __('Unable to get Gocardless bank link data.'));
                 }
             );
+        }
+        check_auth() {
+            if (!this.is_enabled) return {disabled: 1};
+            if (!frappe.has_route_options() || frappe.route_options.ref == null) return {no_route: 1};
+            let ref = frappe.route_options.ref;
+            delete frappe.route_options.ref;
+            if (!this.$isStrVal(ref)) return {invalid_ref: 1, data: ref};
+            let key = 'gocardless_' + ref;
+            if (!this.cache().has(key)) return {not_found: 1, data: ref};
+            var val = this.cache().pop(key);
+            if (
+                !this.$isBaseObj(val) || !this.$isStrVal(val.name)
+                || !this.$isStrVal(val.bank) || !this.$isStrVal(val.bank_id)
+                || !this.$isStrVal(val.auth_id) || !this.$isStrVal(val.auth_expiry)
+            ) return {invalid_data: 1, data: val};
+            return {data: val};
+        }
+        save_auth(data, success, error) {
+            return this.request('save_bank_auth', data, this.$fn(success), this.$fn(error));
         }
     }
     

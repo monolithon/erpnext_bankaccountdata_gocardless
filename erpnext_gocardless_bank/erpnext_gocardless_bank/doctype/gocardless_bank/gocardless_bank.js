@@ -10,7 +10,6 @@ frappe.ui.form.on('Gocardless Bank', {
     onload: function(frm) {
         frappe.gc()
             .on('ready change', function() { this.setup_form(frm); })
-            //.on('page_clean', function() { frm && delete frm._bank; })
             .on('on_alert', function(d, t) {
                 frm._bank.errs.includes(t) && (d.title = __(frm.doctype));
             });
@@ -18,253 +17,203 @@ frappe.ui.form.on('Gocardless Bank', {
             errs: ['fatal', 'error'],
             is_draft: 1,
             is_submitted: 0,
-            inits: {},
-            country: {},
-            list: {
-                key: null,
-                val: null,
-                data: {},
-                cache: {},
-                idx: {},
-                time: 2 * 24 * 60 * 60,
-            },
+            is_cancelled: 0,
+            inits: {sync: 0},
         };
         frm.events.check_doc(frm);
         if (!frm._bank.is_draft) return;
-        frm._bank.inits.setup = 1;
         frm.set_query('company', function(doc) {
             return {query: frappe.gc().get_method('search_companies')};
         });
+        frm.add_fetch('company', 'country', 'country', frm.doctype);
     },
     refresh: function(frm) {
         if (frm.doc.__needs_refresh) return frm.reload_doc();
-        !frm.is_new() && frm.events.check_status(frm);
         !frm._bank.inits.errors && frm.events.setup_errors(frm);
+        !frm.is_new() && frm.events.check_status(frm);
+        delete frm._bank.inits.reload;
     },
     company: function(frm) {
-        if (!frm._bank.is_draft) return;
-        var key = 'company',
-        val = cstr(frm.doc[key]);
-        if (!val.length) return frm.events.load_banks(frm);
-        if (frm._bank.country[val]) {
-            if (frm._bank.country[val] !== cstr(frm.doc.country))
-                frm.set_value('country', frm._bank.country[val]);
-            return frm.events.load_banks(frm);
-        }
-        frappe.gc().request(
-            'get_company_country',
-            {company: val},
-            function(ret) {
-                if (!this.$isStrVal(ret)) return;
-                frm._bank.country[val] = ret;
-                frm.set_value('country', ret);
-                frm.events.load_banks(frm);
-            }
-        );
+        let val = cstr(frm.doc.company);
+        if (!val.length) frm.set_value('country', '');
+    },
+    country: function(frm) {
+        if (cstr(frm.doc.country).length)
+            return frm.events.enqueue_load_banks(frm);
+        
+        frm.events.enqueue_load_banks(frm, 1);
+        frm.events.reset_bank(frm);
+        frappe.gc_banks.reset(frm);
     },
     bank: function(frm) {
-        if (!frm._bank.is_draft) return;
-        let key = 'bank',
-        val = cstr(frm.doc[key]);
-        if (frm._bank.list.val === val) return;
+        let val = cstr(frm.doc.bank);
+        if (!val.length) return frm.events.reset_bank(frm);
+        let obj = frappe.gc_banks.get(val);
+        if (obj) return frm.events.reset_bank(frm, obj);
         frm.events.reset_bank(frm);
-        if (!val.length) return;
-        let idx = frm._bank.list.idx[frm._bank.list.key];
-        if (!idx) return;
-        idx = idx[val];
-        let found = 0;
-        if (frappe.gc().$isNum(idx) && idx >= 0) {
-            idx = frm._bank.list.cache[frm._bank.list.key][idx];
-            if (idx && idx.id) {
-                frm._bank.list.val = val;
-                frm.set_value('bank_id', idx.id);
-                let tdays = cint(idx.transaction_total_days);
-                if (tdays < 1) tdays = frappe.gc().transaction_days;
-                frm.set_value('transaction_days', tdays);
-                found++;
-            }
-        }
-        if (!found) {
-            frm.set_value('bank_id', '');
-            frm.set_value('transaction_days', frappe.gc().transaction_days);
-            frappe.gc().error(__('Selected bank "{0}" is invalid.', [val]));
-        }
+        frappe.gc().error(__('"{0}" isn\'t supported by Gocardless.', [val]));
     },
     validate: function(frm) {
         if (!frm._bank.is_draft) return;
-        if (!frappe.gc().$isStrVal(frm.doc.company)) {
-            frappe.gc().fatal(__('A valid company is required.'));
-            return false;
+        let errs = [];
+        if (!frappe.gc().$isStrVal(frm.doc.company))
+            errs.push(__('A valid company is required.'));
+        else if (!frappe.gc().$isStrVal(frm.doc.country))
+            errs.push(__('Company "{0}" doesn\'t have a valid country.', [frm.doc.company]));
+        if (!frappe.gc().$isStrVal(frm.doc.bank))
+            errs.push(__('A valid bank is required.'));
+        else if (!frappe.gc_banks.key)
+            errs.push(__('Unable to validate support for "{0}" with Gocardless.', [frm.doc.bank]));
+        else {
+            let obj = frappe.gc_banks.get(frm.doc.bank);
+            if (!obj) errs.push(__('"{0}" isn\'t supported by Gocardless.', [frm.doc.bank]));
+            else if (!frappe.gc().$isStrVal(obj.id))
+                errs.push(__('Unable to get Gocardless Bank ID for "{0}".', [frm.doc.bank]));
+            else frm.events.reset_bank(frm, obj);
         }
-        if (!frappe.gc().$isStrVal(frm.doc.country)) {
-            frappe.gc().fatal(__('Company "{0}" doesn\'t have a valid country.', [frm.doc.company]));
-            return false;
-        }
-        if (!frappe.gc().$isStrVal(frm.doc.bank)) {
-            frappe.gc().fatal(__('A valid bank is required.'));
-            return false;
-        }
-        if (!frappe.gc().$isStrVal(frm.doc.bank_id)) {
-            frappe.gc().fatal(__('Bank id for selected bank isn\'t found.'));
-            return false;
-        }
-        if (cint(frm.doc.transaction_days) < 1)
-            frm.set_value('transaction_days', frappe.gc().transaction_days);
+        if (!errs.length) return;
+        frappe.gc().fatal(errs);
+        return false;
     },
     before_submit: function(frm) {
-        if (
-            !frappe.gc().$isStrVal(frm.doc.auth_id)
-            || !frappe.gc().$isStrVal(frm.doc.auth_expiry)
-        ) {
-            frappe.gc().fatal(__('Bank must be authorized before being submitted.'));
-            return false;
-        }
+        delete frm._bank.inits.doc;
     },
     check_doc: function(frm) {
+        frm._bank.inits.doc = 1;
         let is_new = frm.is_new(),
         docstatus = !is_new ? cint(frm.doc.docstatus) : 0;
         frm._bank.is_draft = is_new || docstatus === 0;
         frm._bank.is_submitted = !is_new && docstatus === 1;
+        frm._bank.is_cancelled = !is_new && docstatus === 2;
     },
     check_status: function(frm) {
-        frm.events.check_doc(frm);
-        if (!frm._bank.inits.setup) {
-            frm._bank.inits.setup = 1;
-            frm.events.load_banks(frm);
-        }
-        if (
-            !frappe.gc().$isStrVal(frm.doc.auth_id)
-            || cstr(frm.doc.auth_status) === 'Unlinked'
-        ) {
-            frm._bank.is_draft && !frm._bank.inits.link && frm.events.check_link(frm);
-            frm._bank.inits.sync && frm.events.setup_sync_data(frm, 1);
-            return !frm.is_dirty() && !frm._bank.inits.bar
-                && frappe.gc().$isStrVal(frm.doc.bank)
-                && frm.events.setup_toolbar(frm);
-        }
+        !frm._bank.inits.doc && frm.events.check_doc(frm);
+        if (frm._bank.is_cancelled) return;
+        let setup = !frm._bank.inits.setup;
+        setup && frm.events.load_banks(frm, 1);
+        if (!frm._bank.is_submitted) return;
+        frm._bank.inits.auth = frappe.gc().$isStrVal(frm.doc.auth_id)
+            && frappe.gc().$isStrVal(frm.doc.auth_expiry)
+            && cstr(frm.doc.auth_status) !== 'Unlinked' ? 1 : 0;
         if (!frm._bank.inits.auth) {
-            frm._bank.inits.auth++;
-            frappe.gc().real(
-                'reload_bank_accounts',
-                function(ret) {
+            frm._bank.inits.sync && frm.events.setup_sync_data(frm, 1);
+            if (!frm._bank.inits.link) frm.events.check_link(frm);
+            else !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
+        } else {
+            if (!frm._bank.inits.reload_accounts) {
+                frm._bank.inits.reload_accounts = 1;
+                frappe.gc_accounts.wait();
+                frappe.gc().real('reload_bank_accounts', function(ret) {
                     if (
                         !this.$isDataObj(ret) || (
                             (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.docname))
                             && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
                         )
                     ) return this._error('Accounts: invalid bank accounts reloading data received', ret);
-                    frm._bank.is_submitted && frappe.gc_accounts.reset();
+                    frappe.gc_accounts.reset();
+                    frm._bank.inits.reload = 1;
                     frm.reload_doc();
-                }
-            );
-            frm.events.remove_toolbar(frm);
+                });
+            }
+            frm._bank.inits.bar && frm.events.setup_toolbar(frm, 1);
             !frm._bank.inits.sync && frm.events.setup_sync_data(frm);
+            (frm._bank.inits.reload || setup) && frm.events.load_accounts(frm);
         }
-        !frm._bank.is_draft && frm._bank.inits.auth && frm.events.load_accounts(frm);
     },
     check_link: function(frm) {
-        if (!frappe.gc().is_enabled) return;
+        let ret = frappe.gc().check_auth();
+        if (ret.disabled) return;
         frm._bank.inits.link = 1;
-        if (
-            !frappe.has_route_options()
-            || !frappe.gc().$isStrVal(frappe.route_options.ref)
-        ) return;
-        
-        let key = 'gocardless_' + frappe.route_options.ref;
-        delete frappe.route_options.ref;
-        if (!frappe.gc().cache().has(key))
-            return frappe.gc().error(__('Authorization data for {0} is missing.', [frm.doc.bank]));
-        
-        var auth = frappe.gc().cache().pop(key);
-        if (
-            !auth
-            || !frappe.gc().$isStrVal(auth.id)
-            || !frappe.gc().$isStrVal(auth.expiry)
-        ) {
-            frappe.gc()._error('Invalid authorization data.', frm.doc.bank, auth);
-            return frappe.gc().error(__('The authorization data for {0} is invalid.', [frm.doc.bank]));
+        if (ret.no_route) return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
+        if (ret.invalid_ref) {
+            frappe.gc().error(__('Authorization reference ID is invalid.'));
+            return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
         }
-        frappe.gc().request(
-            'save_bank_link',
+        if (ret.not_found) {
+            frappe.gc().error(__('Authorization data is missing.'));
+            return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
+        }
+        if (
+            ret.invalid_data
+            || ret.data.name !== cstr(frm.docname)
+            || ret.data.bank !== cstr(frm.doc.bank)
+            || ret.data.bank_id !== cstr(frm.doc.bank_id)
+        ) {
+            frappe.gc()._error('Invalid authorization data.', ret.data);
+            frappe.gc().error(__('Authorization data is invalid.'));
+            return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
+        }
+        ret = ret.data;
+        frappe.gc().save_auth(
             {
-                name: cstr(frm.docname),
-                auth_id: auth.id,
-                auth_expiry: auth.expiry,
+                name: ret.name,
+                bank: ret.bank,
+                bank_id: ret.bank_id,
+                auth_id: ret.auth_id,
+                auth_expiry: ret.auth_expiry,
             },
             function(ret) {
-                if (!ret) return this.error(__('Unable to link {0}.', [frm.doc.bank]));
-                this.success_(__('{0} is linked successfully', [frm.doc.bank]));
-                //frappe.gc_accounts.wait();
+                if (!ret) this.error(__('Unable to store bank authorization.'));
+                else this.success_(__('Bank has been authorized successfully.'));
+                frm._bank.inits.reload = 1;
                 frm.reload_doc();
             },
             function(e) {
-                this._error('Failed to link bank.', frm.doc.bank, auth, e.message);
-                this.error(e.self ? e.message : __('Failed to link {0}.', [frm.doc.bank]));
+                this._error('Failed to store bank authorization.', ret, e.message);
+                this.error(e.self ? e.message : __('Failed to store bank authorization.'));
+                frm._bank.inits.reload = 1;
                 frm.reload_doc();
             }
         );
     },
     setup_errors: function(frm) {
         frm._bank.inits.errors = 1;
-        frappe.gc().real(
-            'bank_error',
-            function(ret) {
-                if (
-                    !this.$isDataObj(ret) || !this.$isStrVal(ret.error)
-                    || (
-                        ret.any == null
-                        && (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.docname))
-                        && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
-                    )
-                ) this._error('Invalid error data received', ret);
-                else {
-                    this.error(ret.error);
-                    frm._bank.is_submitted && frappe.gc_accounts.reset();
-                    frm.reload_doc();
-                }
-            }
-        );
+        frappe.gc().real('bank_error', function(ret) {
+            if (
+                !this.$isDataObj(ret) || !this.$isStrVal(ret.error)
+                || (
+                    ret.any == null
+                    && (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.docname))
+                    && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
+                )
+            ) return this._error('Invalid error data received', ret);
+            this.error(ret.error);
+            frm._bank.is_submitted && frm._bank.inits.auth && frappe.gc_accounts.reset();
+            frm._bank.inits.reload = 1;
+            frm.reload_doc();
+        });
     },
-    reset_bank: function(frm) {
-        frm._bank.list.val = null;
-        if (frappe.gc().$isStrVal(frm.doc.auth_id))
-            frm.set_value('auth_id', '');
-        if (cstr(frm.doc.auth_status) !== 'Unlinked')
-            frm.set_value('auth_status', 'Unlinked');
-        frm._bank.inits.sync && frm.events.setup_sync_data(frm, 1);
-        frm.events.remove_toolbar(frm);
+    enqueue_load_banks: function(frm, clear) {
+        if (frm._bank.load_banks_tm) frappe.gc().$timeout(frm._bank.load_banks_tm);
+        if (clear) delete frm._bank.load_banks_tm;
+        if (!clear) frm._bank.load_banks_tm = frappe.gc().$timeout(function() {
+            delete frm._bank.load_banks_tm;
+            frm.events.load_banks(frm);
+        }, 800);
     },
-    load_banks: function(frm) {
-        let country = cstr(frm.doc.country);
-        if (frm._bank.list.key === country) return;
-        frm._bank.list.key = null;
-        frm._bank.list.val = cstr(frm.doc.bank).length ? cstr(frm.doc.bank) : null;
-        frm.events.remove_toolbar(frm);
-        if (!country.length) return frappe.gc_banks.reset(frm, 1);
-        let data = frm._bank.list.data[country];
-        if (data) return frappe.gc_banks.update(frm, country, data, 1);
-        frappe.gc_banks.field(frm);
-        data = frappe.gc_banks.load(country);
-        if (data) {
-            frappe.gc_banks.store(frm, country, data);
-            return frappe.gc_banks.update(frm, country, data);
-        }
+    load_banks: function(frm, init) {
+        if (init) frm._bank.inits.setup = 1;
+        var key = cstr(frm.doc.country);
+        if (frappe.gc_banks.key === key) return;
+        !frappe.gc_banks.field && frappe.gc_banks.setup(frm);
+        let data = frappe.gc_banks.load(key);
+        if (data) return frappe.gc_banks.update(key, data);
         frappe.gc().request(
             'get_banks',
             {
                 company: cstr(frm.doc.company),
-                country: country,
-                cache_only: !frm._bank.is_draft ? 1 : 0
+                country: key,
+                cache_only: init ? 1 : 0
             },
             function(ret) {
                 if (!this.$isArr(ret)) {
-                    this._error('Invalid banks list.', ret);
-                    if (!frm._bank.is_draft) return frappe.gc_banks.reset(frm);
+                    this._error('Invalid banks list.', key, ret);
+                    if (init) return frappe.gc_banks.reset(frm.is_new());
                     return this.error(__('Gocardless banks list received is invalid.'));
                 }
                 if (!this.is_debug && !ret.length) {
                     this._error('Empty banks list.', ret);
-                    if (!frm._bank.is_draft) return frappe.gc_banks.reset(frm);
+                    if (init) return frappe.gc_banks.reset(frm.is_new());
                     return this.error(__('Gocardless banks list received is empty.'));
                 }
                 
@@ -274,64 +223,66 @@ frappe.ui.form.on('Gocardless Bank', {
                     logo: 'https://cdn.iconscout.com/icon/free/png-512/free-s-characters-character-alphabet-letter-36031.png?w=512',
                 });
                 
-                let country = cstr(frm.doc.country);
-                frappe.gc_banks.store(frm, country, ret);
-                frappe.gc_banks.update(frm, country, ret);
+                frappe.gc_banks.store(key, ret);
+                frappe.gc_banks.update(key, ret);
             },
             function(e) {
-                this._error('Failed to get banks list.', country, e.message);
-                if (!frm._bank.is_draft) return frappe.gc_banks.reset(frm);
+                this._error('Failed to get banks list.', key, e.message);
+                if (init) return frappe.gc_banks.reset(frm.is_new());
                 this.error(e.self ? e.message : __('Failed to get banks list from Gocardless.'));
             }
         );
     },
-    remove_toolbar: function(frm) {
-        !frm.is_new() && frm._bank.inits.bar && frm.events.setup_toolbar(frm, 1);
+    reset_bank: function(frm, obj) {
+        if (!obj || frm.doc.bank_id !== obj.id)
+            frm.set_value('bank_id', obj ? obj.id : '');
+        let tdays = obj ? cint(obj.transaction_total_days) : 0;
+        if (tdays < 1) tdays = cint(frappe.gc().transaction_days);
+        if (cint(frm.doc.transaction_days) !== tdays)
+            frm.set_value('transaction_days', tdays);
     },
-    setup_toolbar: function(frm, del) {
+    setup_toolbar: function(frm, clear) {
         let label = __('Authorize');
         if (frm.custom_buttons[label]) {
-            if (!del) return;
+            if (!clear) return;
             frm.custom_buttons[label].remove();
             delete frm.custom_buttons[label];
             delete frm._bank.inits.bar;
         }
-        if (del || frm._bank.inits.bar) return;
+        if (clear || frm._bank.inits.bar) return;
         frm._bank.inits.bar = 1;
         frm.add_custom_button(label, function() {
-            var company = cstr(frm.doc.company),
+            var name = cstr(frm.docname),
+            company = cstr(frm.doc.company),
+            bank = cstr(frm.doc.bank),
             bank_id = cstr(frm.doc.bank_id),
-            transaction_days = cint(frm.doc.transaction_days),
-            docname = cstr(frm.docname);
+            transaction_days = cint(frm.doc.transaction_days);
             
-            frappe.gc().connect_to_bank(
-                company, bank_id, transaction_days, docname,
-                function(link, ref_id, auth_id, auth_expiry) {
+            frappe.gc().get_auth(
+                name, company, bank_id, transaction_days,
+                function(ref_id, auth_id, auth_expiry, auth_link) {
                     auth_expiry = moment().add(cint(auth_expiry), 'days').format(frappe.defaultDateFormat);
-                    this.cache().set(
-                        'gocardless_' + ref_id,
-                        {id: auth_id, expiry: auth_expiry}
-                    );
-                    this.info_(__('Redirecting to {0} authorization page.', [frm.doc.bank]));
-                    this.$timeout(function() { window.location.href = link; }, 2000);
+                    this.cache().set('gocardless_' + ref_id, {
+                        name: name,
+                        bank: bank,
+                        bank_id: bank_id,
+                        auth_id: auth_id,
+                        auth_expiry: auth_expiry
+                    });
+                    this.info_(__('Redirecting to "{0}" authorization page.', [bank]));
+                    this.$timeout(function() { window.location.href = auth_link; }, 2000);
                 },
                 function(e) {
-                    this._error('Failed to connect to bank.', company, bank_id, transaction_days, docname, e.message);
-                    this.error(e.self ? e.message : __('Failed to connect to {0}.', [frm.doc.bank]))
+                    this._error('Failed to connect to bank.', company, bank, bank_id, transaction_days, e.message);
+                    this.error(e.self ? e.message : __('Failed to connect to {0}.', [bank]))
                 }
             );
         });
         frm.change_custom_button_type(label, null, 'success');
     },
     setup_sync_data: function(frm, clear) {
-        if (clear) {
-            delete frm._bank.inits.sync;
-            frm.toggle_display('auto_sync', 0);
-            frm.toggle_display('sync_html', 0);
-            return;
-        }
-        frm._bank.inits.sync = 1;
-        if (!frm._bank.inits.sync_note) {
+        let val = !clear ? 1 : 0;
+        if (val && !frm._bank.inits.sync_note) {
             frm._bank.inits.sync_note = 1;
             frm.get_field('sync_html').html(
                 '<p class="text-danger">'
@@ -339,168 +290,161 @@ frappe.ui.form.on('Gocardless Bank', {
                 + '</p>'
             );
         }
-        frm.toggle_display('auto_sync', 1);
-        frm.toggle_display('sync_html', 1);
+        if (frm._bank.inits.sync === val) return;
+        frm._bank.inits.sync = val;
+        frm.toggle_display('auto_sync', val);
+        frm.toggle_display('sync_html', val);
     },
     load_accounts: function(frm) {
-        if (!frm._bank.inits.accounts) {
-            let field = frm.get_field('bank_accounts_html');
-            if (!field || !field.$wrapper)
-                return frappe.gc()._error('Unable to get the accounts html field.');
-            frappe.gc_accounts.init(frm, field);
-            frm._bank.inits.accounts = 1;
-        }
-        frappe.gc_accounts.check();
+        if (frappe.gc_accounts.ready) return frappe.gc_accounts.check();
+        frappe.gc_accounts.init(frm);
+        if (!frappe.gc_accounts.ready)
+            frappe.gc()._error('Unable to get the accounts html field.');
     },
 });
 
 
 frappe.gc_banks = {
-    load: function(country) {
-        return frappe.gc().cache().get('banks_list_' + country);
+    time: 2 * 24 * 60 * 60,
+    key: null,
+    field: null,
+    data: null,
+    load: function(key) {
+        if (!key) return;
+        let data = frappe.gc().cache().get('banks_list_' + key);
+        if (data) this.store(key, data);
+        return data;
     },
-    store: function(frm, country, data) {
-        frm._bank.list.cache[country] = data;
-        frappe.gc().cache().set('banks_list_' + country, data, frm._bank.list.time);
+    store: function(key, data) {
+        frappe.gc().cache().set('banks_list_' + key, data, this.time);
     },
-    field: function(frm) {
-        if (frm._bank.inits.banks_field) return;
-        let field = this._field(frm)
-        if (!field) return;
-        field = field.awesomplete;
-        if (
-            !field
-            || frappe.gc().$isFunc(field.__item)
-            || !frappe.gc().$isFunc(field.item)
-        ) return;
-        frm._bank.inits.banks_field = 1;
-        if (!field.__item) field.__item = field.item;
-        field.item = function(item) {
-            if (!cur_frm || cur_frm.doctype !== 'Gocardless Bank') {
-                if (!this.__item) return window.location.reload(true);
-                else {
-                    this.item = this.__item;
-                    return this.item(item);
-                }
+    update: function(key, data) {
+        if (!this.field) return;
+        this.key = key;
+        this.data = data;
+        this.field.set_data(frappe.gc().$map(this.data, function(v, i) {
+            return {value: v.name, label: __(v.name)};
+        }));
+        this.field.translate_values = false;
+    },
+    reset: function(frm) {
+        if (!this.field) return;
+        this.key = null;
+        this.data = null;
+        let val = frm && !frm.is_new() ? cstr(frm.doc.bank) : '';
+        this.field.set_data(val.length ? [{label: __(val), value: val}] : []);
+    },
+    get: function(name) {
+        if (!this.data) return null;
+        for (let i = 0, l = this.data.length; i < l; i++) {
+            if (this.data[i].name === name) return this.data[i];
+        }
+    },
+    setup: function(frm) {
+        if (this.field) return;
+        let field = frm.get_field('bank');
+        if (!field) return frappe.gc()._error('Unable to get bank field.');
+        let awesomplete = field.awesomplete;
+        if (!awesomplete || !frappe.gc().$isFunc(awesomplete.item))
+            return frappe.gc()._error('Unable to get bank field awesomplete.');
+        
+        this.field = field;
+        awesomplete.__item = awesomplete.item;
+        awesomplete.item = function(item) {
+            if (cur_frm && cur_frm.doctype === 'Gocardless Bank' && frappe.gc_banks)
+                return frappe.gc_banks.build_item(item, this.get_item(item.value));
+            if (this.__item) {
+                this.item = this.__item;
+                delete this.__item;
+                return this.item(item);
             }
-            let d = this.get_item(item.value);
-            if (!d) d = item;
-            if (!d.label) d.label = d.value;
-            let idx = frm._bank.list.idx[frm._bank.list.key][d.value],
-            html = '<strong>' + d.label + '</strong>',
-            img = '<img src="{0}" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
-            fnd = 0;
-            if (frappe.gc().$isNum(idx) && idx >= 0) {
-                idx = frm._bank.list.cache[frm._bank.list.key][idx];
-                if (idx && frappe.gc().$isStrVal(idx.logo) && ++fnd)
-                    html = img.replace('{1}', idx.name).replace('{0}', frappe.gc().image().load(
-                        idx.logo, 18, 18, frm._bank.list.time
-                    )) + html;
-            }
-            if (!fnd) {
-                idx = idx && frappe.gc().$isStrVal(idx.name) ? idx.name : 'Bank';
-                html = img.replace('{1}', idx)
-                .replace('{0}', 'https://placehold.co/100x100/4b535a/fff/png?text=' + idx[0]) + html;
-            }
-            if (d.description) html += '<br><span class="small">' + __(d.description) + '</span>';
-            return $('<li></li>')
-                .data('item.autocomplete', d)
-                .prop('aria-selected', 'false')
-                .html('<a><p>' + html + '</p></a>')
-                .get(0);
+            window.location.reload(true);
         };
     },
-    update: function(frm, country, data, ready) {
-        let field = this._field(frm)
-        if (!field) return;
-        if (!ready) {
-            frm._bank.list.idx[country] = {};
-            data = frappe.gc().$map(data, function(v, i) {
-                frm._bank.list.idx[country][v.name] = i;
-                return {value: v.name, label: __(v.name)};
-            });
-            frm._bank.list.data[country] = data;
+    build_item: function(item, data) {
+        if (!data) data = item;
+        if (!data.label) data.label = __(data.value);
+        let obj = this.get(data.value),
+        html = '<strong>' + data.label + '</strong>',
+        img = '<img src="{0}" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
+        label = data.label,
+        logo = 'https://placehold.co/100x100/4b535a/fff/png?text=' + label[0];
+        if (obj && frappe.gc().$isStrVal(obj.logo)) {
+            label = __(obj.name);
+            logo = frappe.gc().image().load(obj.logo, 18, 18, this.time);
         }
-        frm._bank.list.key = country;
-        field.set_data(data);
-        field.translate_values = false;
+        html = img.replace('{0}', logo).replace('{1}', label) + html;
+        if (data.description) html += '<br><span class="small">' + __(data.description) + '</span>';
+        return $('<li></li>')
+            .data('item.autocomplete', data)
+            .prop('aria-selected', 'false')
+            .html('<a><p>' + html + '</p></a>')
+            .get(0);
     },
-    reset: function(frm, empty) {
-        let field = this._field(frm)
-        if (!field) return;
-        let val = cstr(frm.doc.bank),
-        data = [];
-        if (!empty && val.length) data[0] = {label: __(val), value: val};
-        field.set_data(data);
-    },
-    _field(frm) {
-        let field = frm.get_field('bank');
-        if (field) return field;
-        frappe.gc()._error('Unable to get the bank form field.');
-        return null;
-        
+    destroy: function() {
+        for (let k in this) {
+            if (frappe.gc().$hasProp(k, this)) delete this[k];
+        }
     },
 };
 
 
 frappe.gc_accounts = {
     _wait_time: 1 * 60 * 1000,
-    init(frm, field) {
-        if (this._ready) return;
-        this._enabled = frappe.gc().is_enabled;
-        this._destroy = frappe.gc().$fn(this.destroy, this);
-        this._refresh = frappe.gc().$fn(this.refresh, this);
-        frappe.gc().once('page_change', this._destroy);
-        frappe.gc().on('change', this._refresh);
-        this._ready = 1;
+    init(frm) {
+        let field = frm.get_field('bank_accounts_html');
+        if (!field || !field.$wrapper) return;
+        this.ready = 1;
         this._frm = frm;
         this._field = field;
+        this._enabled = frappe.gc().is_enabled;
+        this._destroy = frappe.gc().$fn(this.destroy, this);
+        this._refresh = frappe.gc().$fn(this._refresh_btns, this);
+        frappe.gc().once('page_change', this._destroy);
+        frappe.gc().on('change', this._refresh);
+        this.check();
+        return 1;
     },
     wait() {
-        if (this._wait_tm) return;
-        this._ready && this._loading();
-        this._wait_tm = frappe.gc().$timeout(function() {
-            this._wait_tm = this._linked = null;
-            this._ready && this._frm.reload_doc();
+        if (!this._wait_tm) this._wait_tm = frappe.gc().$timeout(function() {
+            this.reset();
+            this._frm._bank.inits.reload = 1;
+            this._frm.reload_doc();
         }, this._wait_time, null, this);
     },
     check() {
-        if (this._ready) this._wait_tm ? this._loading() : this._render();
+        if (this.ready) this._wait_tm ? this._loading() : this._render();
     },
     reset() {
         this._wait_tm && frappe.gc().$timeout(this._wait_tm);
         this._wait_tm = this._linked = null;
     },
-    refresh() {
-        if (frappe.gc().is_enabled === this._enabled) return;
-        this._enabled = !!frappe.gc().is_enabled;
-        this._toggle_btns('action', this._enabled);
-        this._toggle_btns('link', this._enabled);
-    },
     destroy() {
         this._refresh && frappe.gc().off('change', this._refresh);
         if (this._$table) {
+            this._$table.off('click', 'button.gc-balance', this._on_balance);
             this._$table.off('click', 'button.gc-action', this._on_action);
             this._$table.off('click', 'button.gc-link', this._on_link);
         }
-        if (this._dialog) try {
-            this._dialog.modal_body.off('click', 'button.gc-new-account', this._dialog.gc.on_new_click);
-            this._dialog.modal_body.off('click', 'button.gc-link-account', this._dialog.gc.on_link_click);
-            this._dialog.modal('destroy');
-        } catch(_) {}
+        if (this._balance_dialog) {
+            try { this._balance_dialog.hide(); } catch(_) {}
+            try { this._balance_dialog.modal('destroy'); } catch(_) {}
+            try { this._balance_dialog.wrapper.remove(); } catch(_) {}
+        }
+        if (this._dialog) {
+            try { this._dialog.hide(); } catch(_) {}
+            try {
+                this._dialog.modal_body.off('click', 'button.gc-new-account', this._dialog.gc.on_new_click);
+                this._dialog.modal_body.off('click', 'button.gc-link-account', this._dialog.gc.on_link_click);
+            } catch(_) {}
+            try { this._dialog.modal('destroy'); } catch(_) {}
+            try { this._dialog.wrapper.remove(); } catch(_) {}
+        }
         if (this._field) try { this._field.$wrapper.empty(); } catch(_) {}
         this.reset();
-        this._frm = null;
-        this._field = null;
-        this._$loading = null;
-        this._$wrapper = null;
-        this._$table = null;
-        this._$body = null;
-        this._dialog = null;
-        this._accounts = null;
-        this._linked = null;
-        this._destroy = null;
-        this._refresh = null;
+        for (let k in this) {
+            if (frappe.gc().$hasProp(k, this)) delete this[k];
+        }
     },
     _loading() {
         if (!this._$loading) this._$loading = $('\
@@ -517,12 +461,11 @@ frappe.gc_accounts = {
     },
     _render() {
         frappe.gc()._log('Accounts: rendering bank account table');
-        if (!this._$wrapper) this._build();
-        else {
-            this._destroy_popover();
-            this._$body.empty();
-        }
-        if (!frappe.gc().$isArrVal(this._frm.doc.bank_accounts)) {
+        if (!this._$table) this._build();
+        else this._$body.empty();
+        if (!frappe.gc().$isArr(this._frm.doc.bank_accounts)) this._length = 0;
+        else this._length = this._frm.doc.bank_accounts.length;
+        if (!this._length) {
             this._$body.append('\
 <tr>\
     <td scope="row" colspan="4" class="text-center text-muted">\
@@ -531,18 +474,20 @@ frappe.gc_accounts = {
 </tr>\
             ');
         } else {
-            for (let i = 0, l = this._frm.doc.bank_accounts.length, r, h; i < l; i++) {
+            for (let i = 0, r, h; i < this._length; i++) {
                 r = this._frm.doc.bank_accounts[i];
-                h = [
-                    this._render_account(r),
-                    this._render_balance(r),
-                    this._render_status(r),
-                    this._render_action(r)
-                ].join('\n');
-                this._$body.append('<tr data-gc-account="' + r.account + '">' + h + '</tr>');
+                this._$body.append('\
+<tr data-gc-account="' + r.account + '">\
+    ' + [
+        this._render_account(r),
+        this._render_balance(r),
+        this._render_status(r),
+        this._render_action(r)
+    ].join('\n') + '\
+</tr>\
+                ');
             }
-            this._init_popover();
-            this.refresh();
+            this._refresh_btns();
         }
         this._switch('table');
     },
@@ -560,8 +505,8 @@ frappe.gc_accounts = {
                 '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
                 {id: 'gocardless_css'}
             );
-        this._$wrapper = $('<div class="table-responsive mb-4 mx-md-2 mx-1"></div>');
-        this._$table = $('\
+        let $wrapper = $('<div class="table-responsive mb-4 mx-md-2 mx-1"></div>')
+            .append('\
 <table class="table table-bordered table-hover gc-table">\
     <thead class="thead-dark">\
         <tr>\
@@ -574,13 +519,22 @@ frappe.gc_accounts = {
     <tbody>\
     </tbody>\
 </table>\
-        ').appendTo(this._$wrapper);
+            ')
+            .appendTo(this._field.$wrapper);
+        this._$table = $wrapper.find('.gc-table').first();
         this._$body = this._$table.find('tbody').first();
+        this._on_balance = frappe.gc().$fn(this._on_balance, this);
         this._on_action = frappe.gc().$fn(this._on_action, this);
         this._on_link = frappe.gc().$fn(this._on_link, this);
+        this._$table.on('click', 'button.gc-balance', this._on_balance);
         this._$table.on('click', 'button.gc-action', this._on_action);
         this._$table.on('click', 'button.gc-link', this._on_link);
-        this._$wrapper.appendTo(this._field.$wrapper);
+    },
+    _refresh_btns() {
+        if (frappe.gc().is_enabled === this._enabled) return;
+        this._enabled = !!frappe.gc().is_enabled;
+        this._toggle_btns('action', this._enabled);
+        this._toggle_btns('link', this._enabled);
     },
     _render_account(row) {
         let html = '<strong>' + row.account + '</strong>';
@@ -602,18 +556,13 @@ frappe.gc_accounts = {
                 }
         }
         return '\
-        <td>\
-            <small class="d-block w-100 text-center">\
-                ' + Object.values(frappe.gc().$map({
-                    opening: this._balance_labels.opening,
-                    closing: this._balance_labels.closing,
-                }, function(v, k) {
-                    return v + ': ' + (data[k] != null ? data[k] : 'N/A');
-                })).join('<br />') + '\
-            </small>\
-            <small class="d-block w-100 text-center text-muted gc-balance">\
-                ' + __('View All') + '\
-            </small>\
+        <td class="text-center">\
+            ' + Object.values(frappe.gc().$map({
+                opening: this._balance_labels.opening,
+                closing: this._balance_labels.closing,
+            }, function(v, k) {
+                return '<small>' + v + ': ' + (data[k] != null ? data[k] : 'N/A') + '</small>';
+            })).join('<br />') + '\
         </td>\
         ';
     },
@@ -630,46 +579,65 @@ frappe.gc_accounts = {
         actions = [],
         exists = frappe.gc().$isStrVal(row.bank_account_ref),
         disabled = row.status !== 'Ready' && row.status !== 'Enabled';
+        actions.push(html
+            .replace('{action}', 'gc-balance')
+            .replace('{color}', 'info')
+            .replace('{attr}', '')
+            .replace('{label}', __('Balance'))
+        );
         exists && actions.push(html
             .replace('{action}', 'gc-link')
-            .replace('{color}', 'success')
+            .replace('{color}', 'default')
             .replace('{attr}', '')
             .replace('{label}', __('Edit'))
         );
         actions.push(html
             .replace('{action}', 'gc-action')
-            .replace('{color}', disabled ? 'default' : (exists ? 'info' : 'primary'))
+            .replace('{color}', exists ? 'warning' : 'success')
             .replace('{attr}', disabled ? ' disabled' : '')
             .replace('{label}', exists ? __('Sync') : __('Add'))
         );
         return '<td><div class="btn-group btn-group-sm">' + actions.join('') + '</div></td>';
     },
-    _init_popover() {
-        var me = this;
-        this._$body.find('.gc-balance').popover({
-            trigger: 'hover click',
-            placement: 'top',
-            title: __('Account Balance'),
-            content: function() {
-                let $el = $(this),
-                account = $el.parents('tr').attr('data-gc-account'),
-                data = {};
-                if (frappe.gc().$isStrVal(account)) {
-                    let row = me._get_bank_account(account);
-                    if (row && row.balances) {
-                        let list = frappe.gc().$parseJson(row.balances);
-                        if (frappe.gc().$isArrVal(list))
-                            for (let i = 0, l = list.length, v; i < l; i++) {
-                                v = list[i];
-                                data[v.type] = format_currency(v.amount, v.currency);
-                            }
-                    }
-                }
-                return '\
+    _on_balance(e) {
+        if (!this._balance_dialog) {
+            this._balance_dialog = new frappe.ui.Dialog({
+                title: __('Bank Account Balance'),
+                indicator: 'blue',
+            });
+            this._balance_dialog.modal_body.append('\
 <div class="table-responsive m-0 p-0">\
     <table class="table table-sm table-borderless gc-table">\
         <tbody>\
-            ' + Object.values(frappe.gc().$map(me._balance_labels, function(v, k) {
+        </tbody>\
+    </table>\
+</div>\
+            ');
+            this._balance_dialog.$wrapper.on('hidden.bs.modal', frappe.gc().$fn(function() {
+                this._balance_dialog.modal_body.find('tbody').first().empty();
+            }, this));
+            this._balance_dialog.get_primary_btn().addClass('hide');
+            this._balance_dialog.set_secondary_action_label(__('Close'));
+            this._balance_dialog.set_secondary_action(frappe.gc().$fn(function() {
+                this._balance_dialog.hide();
+            }, this));
+        }
+        let $el = $(e.target),
+        account = $el.parents('tr').attr('data-gc-account');
+        var data = {};
+        if (frappe.gc().$isStrVal(account)) {
+            let row = this._get_bank_account(account);
+            if (row && row.balances) {
+                let list = frappe.gc().$parseJson(row.balances);
+                if (frappe.gc().$isArrVal(list))
+                    for (let i = 0, l = list.length, v; i < l; i++) {
+                        v = list[i];
+                        data[v.type] = format_currency(v.amount, v.currency);
+                    }
+            }
+        }
+        this._balance_dialog.modal_body.find('tbody').first().append('\
+            ' + Object.values(frappe.gc().$map(this._balance_labels, function(v, k) {
                     return '\
             <tr>\
                 <td scope="row">' + v + '</td>\
@@ -677,18 +645,8 @@ frappe.gc_accounts = {
             </tr>\
                     ';
             })).join('\n') + '\
-        </tbody>\
-    </table>\
-</div>\
-                ';
-            },
-            html: true
-        });
-    },
-    _destroy_popover() {
-        try {
-            this._$body.find('.gc-balance').popover('dispose');
-        } catch(_) {}
+        ');
+        this._balance_dialog.show();
     },
     _on_action(e) {
         if (this._action_clicked) return;
@@ -978,6 +936,7 @@ frappe.gc_accounts = {
                             me._dialog.gc.hide_spinner();
                             frappe.gc()._log('Accounts: storing bank account success');
                             frappe.gc().success_(__('The Gocardless bank account "{0}" has been added successfully', [me._dialog.gc.account]));
+                            me._frm._bank.inits.reload = 1;
                             me._frm.reload_doc();
                         },
                         function() {
@@ -1012,6 +971,7 @@ frappe.gc_accounts = {
                             me._dialog.gc.hide_spinner();
                             this._log('Accounts: linking bank account success');
                             this.success_(__('The bank account "{0}" has been linked successfully', [acc_name]));
+                            me._frm._bank.inits.reload = 1;
                             me._frm.reload_doc();
                         },
                         function(e) {

@@ -21,9 +21,9 @@ def store_bank_account(name, account):
         })
         return 0
     
-    from .cache import get_cached_doc
+    from .bank import get_bank_doc
     
-    doc = get_cached_doc("Gocardless Bank", name)
+    doc = get_bank_doc(name)
     if not doc:
         _emit_error({
             "name": name,
@@ -89,13 +89,12 @@ def store_bank_account(name, account):
         
         enqueue_enable_currencies([row.account_currency])
     
-    bank_account = add_bank_account(doc.name, doc.company, doc.bank, data)
+    bank_account = add_bank_account(doc, data)
     if bank_account and not row.bank_account_ref:
         row.bank_account_ref = bank_account
         update = 1
     
     if update:
-        doc.flags.update_bank_accounts = 1
         doc.save(ignore_permissions=True)
     
     return 1 if bank_account else 0
@@ -115,9 +114,9 @@ def change_bank_account(name, account, bank_account):
         })
         return 0
     
-    from .cache import get_cached_doc
+    from .bank import get_bank_doc
     
-    doc = get_cached_doc("Gocardless Bank", name)
+    doc = get_bank_doc(name)
     if not doc:
         _emit_error({
             "name": name,
@@ -138,7 +137,7 @@ def change_bank_account(name, account, bank_account):
         })
         return 0
     
-    return update_bank_account(doc, bank_account, data)
+    return update_bank_account(doc, bank_account, data, True)
 
 
 # [G Bank Form]
@@ -356,10 +355,7 @@ def make_account_name(data: dict, exist: list, idx: int):
 
 
 # [Bank]*
-def store_bank_accounts(name, accounts):
-    from .cache import get_cached_doc
-    
-    doc = get_cached_doc("Gocardless Bank", name)
+def store_bank_accounts(doc, accounts):
     if not doc:
         return 0
     
@@ -381,22 +377,21 @@ def store_bank_accounts(name, accounts):
         
         doc.append("bank_accounts", data)
     
-    doc.flags.update_bank_accounts = 1
     doc.save(ignore_permissions=True)
     return 1
 
 
 # [Internal]
-def add_bank_account(name, company, bank, data):
+def add_bank_account(doc, data):
     err = None
     dt = "Bank Account"
-    account_name = "{0} - {1}".format(data["account"], bank)
+    account_name = "{0} - {1}".format(data["account"], doc.bank)
     account = {
         "account_name": data["account"],
-        "bank": bank,
+        "bank": doc.bank,
         "account_type": data["account_type"],
         "gocardless_bank_account_no": data["account_no"],
-        "company": company,
+        "company": doc.company,
         "iban": data["iban"]
     }
     if not frappe.db.exists(dt, account_name):
@@ -409,14 +404,14 @@ def add_bank_account(name, company, bank, data):
                 })
                 .insert(ignore_permissions=True, ignore_mandatory=True))
         except frappe.UniqueValidationError:
-            err = _("ERPNext: Bank account \"{0}\" of bank \"{1}\" already exists.").format(data["account"], bank)
+            err = _("ERPNext: Bank account \"{0}\" of bank \"{1}\" already exists.").format(data["account"], doc.bank)
         except Exception as exc:
-            err = _("ERPNext: Unable to create bank account \"{0}\" of bank \"{1}\".").format(data["account"], bank)
+            err = _("ERPNext: Unable to create bank account \"{0}\" of bank \"{1}\".").format(data["account"], doc.bank)
             _store_error({
                 "error": "Unable to create bank account.",
-                "gc_bank": name,
-                "bank": bank,
-                "company": company,
+                "gc_bank": doc.name,
+                "bank": doc.bank,
+                "company": doc.company,
                 "data": data,
                 "exception": str(exc)
             })
@@ -427,12 +422,12 @@ def add_bank_account(name, company, bank, data):
                 .update(account)
                 .save(ignore_permissions=True))
         except Exception as exc:
-            err = _("ERPNext: Unable to update bank account \"{0}\" of bank \"{1}\".").format(data["account"], bank)
+            err = _("ERPNext: Unable to update bank account \"{0}\" of bank \"{1}\".").format(data["account"], doc.bank)
             _store_error({
                 "error": "Unable to create bank account.",
-                "gc_bank": name,
-                "bank": bank,
-                "company": company,
+                "gc_bank": doc.name,
+                "bank": doc.bank,
+                "company": doc.company,
                 "data": data,
                 "exception": str(exc)
             })
@@ -441,15 +436,15 @@ def add_bank_account(name, company, bank, data):
         from .cache import clear_doc_cache
         
         clear_doc_cache(dt)
-        ret = update_bank_account(name, account_name, data["account"])
+        ret = update_bank_account(doc, account_name, data["account"])
         if not ret:
-            err = _("Unable to update bank account \"{0}\" of bank \"{1}\".").format(data["account"], bank)
+            err = _("Unable to update bank account \"{0}\" of bank \"{1}\".").format(data["account"], doc.bank)
     
     if err:
         from .common import log_error
         
         log_error(err)
-        _emit_error({"name": name, "error": err})
+        _emit_error({"name": doc.name, "error": err})
         return None
     
     return account_name
@@ -476,15 +471,9 @@ def is_valid_IBAN(value):
 
 
 # [Internal]
-def update_bank_account(name, bank_account, account):
-    if not isinstance(name, str):
-        doc = name
-    else:
-        from .cache import get_cached_doc
-        
-        doc = get_cached_doc("Gocardless Bank", name)
-        if not doc:
-            return 0
+def update_bank_account(doc, bank_account, account, emit=False):
+    if not doc:
+        return 0
     
     for v in doc.bank_accounts:
         if v.account == account:
@@ -492,7 +481,7 @@ def update_bank_account(name, bank_account, account):
             doc.save(ignore_permissions=True)
             return 1
     
-    if not isinstance(name, str):
+    if emit:
         _emit_error({
             "name": doc.name,
             "error": _("Bank account \"{0}\" is not part of Gocardless bank \"{1}\".").format(account, doc.name),

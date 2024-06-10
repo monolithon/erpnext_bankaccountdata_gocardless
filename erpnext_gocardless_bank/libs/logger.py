@@ -48,13 +48,11 @@ def get_log_files():
     
     try:
         ret = []
-        exp = "{}-*.log*".format(__abbr__)
         path = os.path.join("..", "logs")
         if not path.endswith("/"):
             path = path + "/"
-        for files in glob.glob(path + exp):
-            for f in files:
-                ret.append(f.strip("/").split("/")[-1])
+        for f in glob.glob(path + __abbr__ + "-*.log*"):
+            ret.append(f.strip("/").split("/")[-1])
         
         return ret
     except Exception:

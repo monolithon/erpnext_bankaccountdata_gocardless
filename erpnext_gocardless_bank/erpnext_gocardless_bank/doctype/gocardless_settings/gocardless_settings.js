@@ -10,8 +10,8 @@ frappe.ui.form.on('Gocardless Settings', {
     onload: function(frm) {
         frappe.gc()
             .on('ready change', function() {
-                if (this.is_debug) frappe._gc_logs.init(frm);
-                else frappe._gc_logs.destroy(frm);
+                if (this.is_debug) !frm._set.logs && frappe._gc_logs.init(frm);
+                else frm._set.logs && frappe._gc_logs.destroy(frm);
             })
             /*.on('page_clean', function() {
                 frm && frm.events.destroy_table(frm);
@@ -38,6 +38,9 @@ frappe.ui.form.on('Gocardless Settings', {
             return {filters: {is_group: 0}};
         });
         frm.events.setup_table(frm);
+    },
+    refresh: function(frm) {
+        !frm._set.logs && frappe._gc_logs.init(frm);
     },
     validate: function(frm) {
         let tkey = 'access';
@@ -149,49 +152,49 @@ frappe.ui.form.on('Gocardless Access', {
 
 frappe._gc_logs = {
     _tpl: {},
-    _el: null,
     init: function(frm) {
         if (frm._set.logs) return;
+        frappe.gc()._log('Logs list init.');
         frm._set.logs = 1;
         this._destroy = frappe.gc().$afn(this.destroy, [frm], this);
-        frappe.gc().once('page_clean', this._destroy);
+        //frappe.gc().once('page_clean', this._destroy);
         let $el = frm.get_field('logs_html').$wrapper;
-        this._events($el);
-        if (!frappe.gc().$hasElem('gocardless-style'))
+        this._$el = $el;
+        this._events();
+        if (!frappe.gc().$hasElem('gocardless_css'))
             frappe.gc().$loadCss(
                 '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
-                {id: 'gocardless-style'}
+                {id: 'gocardless_css'}
             );
         $el.append('<div class="gc-flex-wrapper gc-mh-300 mt-2 mb-4 mx-md-2 mx-1"></div>');
-        $el = $el.find('.gc-flex-wrapper').first();
+        this._$wrapper = $el.find('.gc-flex-wrapper').first();
         frm.toggle_display('logs_section', 1);
         frm.toggle_display('logs_html', 1);
-        this._refresh($el);
+        this._refresh();
     },
     destroy: function(frm) {
         if (!frm._set.logs) return;
         frm._set.logs = 0;
         frm.toggle_display('logs_section', 0);
         frm.toggle_display('logs_html', 0);
-        frappe.gc().off('page_clean', this._destroy);
-        let $el = frm.get_field('logs_html').$wrapper;
-        $el.off('click', 'button.refresh-logs', this._handlers.refresh);
-        $el.off('click', 'button.view-log', this._handlers.view);
-        $el.empty();
+        //frappe.gc().off('page_clean', this._destroy);
+        this._$el.off('click', 'button.refresh-logs', this._handlers.refresh);
+        this._$el.off('click', 'button.view-log', this._handlers.view);
+        this._$el.empty();
         try { this._dialog && this._dialog.dialog('destroy'); } catch(_) {}
         try { this._dialog.$wrapper && this._dialog.$wrapper.remove(); } catch(_) {}
         this._tpl = {};
-        this._el = null;
+        this._elkey = null;
         delete this._destroy;
+        delete this._$el;
+        delete this._$wrapper;
         delete this._handlers;
         delete this._list;
         delete this._dialog;
     },
-    _events: function($el) {
+    _events: function() {
         this._handlers = {
-            refresh: frappe.gc().$fn(function(e) {
-                this._refresh($el);
-            }, this),
+            refresh: frappe.gc().$fn(this._refresh, this),
             view: frappe.gc().$fn(function(e) {
                 let $tr = $(e.target);
                 if (!$tr.is('tr')) $tr = $tr.parents('tr');
@@ -207,14 +210,14 @@ frappe._gc_logs = {
                 else frappe.gc()._error('Log filename from attr is invalid.', name);
             }, this),
         };
-        $el.on('click', 'button.refresh-logs', this._handlers.refresh);
-        $el.on('click', 'button.view-log', this._handlers.view);
-        $el.on('click', 'button.remove-log', this._handlers.remove);
+        this._$el.on('click', 'button.refresh-logs', this._handlers.refresh);
+        this._$el.on('click', 'button.view-log', this._handlers.view);
+        this._$el.on('click', 'button.remove-log', this._handlers.remove);
     },
-    _refresh: function($el) {
+    _refresh: function() {
         if (this._refreshing) return;
         this._refreshing = 1;
-        this._loading($el);
+        this._loading();
         var me = this;
         frappe.gc().request(
             'get_log_files', null,
@@ -222,33 +225,34 @@ frappe._gc_logs = {
                 me._refreshing = 0;
                 if (!this.$isArr(ret)) {
                     this._error('Logs list received is invalid.', ret);
-                    me._error($el);
+                    me._error();
                 } else {
+                    this._log('Logs list received.', ret);
                     me._list = ret;
-                    me._render($el);
+                    me._render();
                 }
             },
             function(e) {
                 me._refreshing = 0;
-                this._error('Failed to load logs list.', e.message, e.stack);
-                me._error($el);
+                this._error('Failed to load logs list.', e.message);
+                me._error();
             }
         );
     },
-    _toggle: function($el, key) {
+    _toggle: function(key) {
         let $e;
-        if (this._el) {
-            $e = $el.find('.' + this._el);
+        if (this._elkey) {
+            $e = this._$wrapper.find('.' + this._elkey);
             !$e.isHidden() && $e.hidden(1);
         }
-        this._el = key;
-        $e = $el.find('.' + this._el);
+        this._elkey = key;
+        $e = this._$wrapper.find('.' + this._elkey);
         $e.isHidden() && $e.hidden(0);
     },
-    _loading: function($el) {
+    _loading: function() {
         if (!this._tpl.loading) {
             this._tpl.loading = 1;
-            $el.append('\
+            this._$wrapper.append('\
 <div class="logs-loading text-center lu-hidden">\
     <div class="spinner-border text-info" role="status">\
         <span class="sr-only">' + __('Loading') + '</span>\
@@ -259,23 +263,23 @@ frappe._gc_logs = {
 </div>\
             ');
         }
-        this._toggle($el, 'logs-loading');
+        this._toggle('logs-loading');
     },
-    _error: function($el, message) {
+    _error: function(message) {
         if (!this._tpl.error) {
             this._tpl.error = 1;
-            $el.append('\
+            this._$wrapper.append('\
 <div class="logs-error text-center text-danger lu-hidden">\
     ' + __('Failed to list logs files.') + '\
 </div>\
             ');
         }
-        this._toggle($el, 'logs-error');
+        this._toggle('logs-error');
     },
-    _render: function($el) {
+    _render: function() {
         if (!this._tpl.table) {
             this._tpl.table = 1;
-            $el.append('\
+            this._$wrapper.append('\
 <div class="logs-table w-100 lu-hidden">\
     <div class="w-100 mb-1">\
         <button type="button" class="btn btn-default btn-sm refresh-logs">\
@@ -297,7 +301,7 @@ frappe._gc_logs = {
 </div>\
             ');
         }
-        $el.find('.gc-table-body').first().empty().append(
+        this._$wrapper.find('.gc-table-body').first().empty().append(
             this._list && this._list.length
             ? frappe.gc().$map(this._list, function(v) {
                 return '\
@@ -324,7 +328,7 @@ frappe._gc_logs = {
                 </tr>\
             '
         );
-        this._toggle($el, 'logs-table');
+        this._toggle('logs-table');
     },
     _open: function(name) {
         if (!this._dialog) this._make();
@@ -416,7 +420,7 @@ frappe._gc_logs = {
                     },
                     function(e) {
                         this._error('Failed to remove log file.', name, e.message);
-                        this.error_(__('Failed to remove log file "{0}".', [name]));
+                        this.error_(e.self ? e.message : __('Failed to remove log file "{0}".', [name]));
                     }
                 );
             },

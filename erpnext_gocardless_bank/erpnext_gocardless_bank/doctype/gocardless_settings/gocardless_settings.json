@@ -175,7 +175,7 @@
    "label": "Supplier Default Group",
    "options": "Supplier Group",
    "read_only_depends_on": "eval:doc.supplier_exist_in_transaction === 'Ignore' || doc.supplier_in_transaction_doesnt_exist === 'Ignore'",
-   "mandatory_depends_on": "eval:doc.supplier_exist_in_transaction === 'Process' && doc.supplier_in_transaction_doesnt_exist === 'Add Supplier'"
+   "mandatory_depends_on": "eval:doc.supplier_exist_in_transaction !== 'Ignore' && doc.supplier_in_transaction_doesnt_exist !== 'Ignore'"
   },
   {
    "fieldname": "supplier_bank_account_exist_in_transaction",
@@ -213,7 +213,7 @@
    "label": "Customer Default Group",
    "options": "Customer Group",
    "read_only_depends_on": "eval:doc.customer_exist_in_transaction === 'Ignore' || doc.customer_in_transaction_doesnt_exist === 'Ignore'",
-   "mandatory_depends_on": "eval:doc.customer_exist_in_transaction === 'Process' && doc.customer_in_transaction_doesnt_exist === 'Add Customer'"
+   "mandatory_depends_on": "eval:doc.customer_exist_in_transaction !== 'Ignore' && doc.customer_in_transaction_doesnt_exist !== 'Ignore'"
   },
   {
    "fieldname": "customer_default_territory",
@@ -221,7 +221,7 @@
    "label": "Customer Default Territory",
    "options": "Territory",
    "read_only_depends_on": "eval:doc.customer_exist_in_transaction === 'Ignore' || doc.customer_in_transaction_doesnt_exist === 'Ignore'",
-   "mandatory_depends_on": "eval:doc.customer_exist_in_transaction === 'Process' && doc.customer_in_transaction_doesnt_exist === 'Add Customer'"
+   "mandatory_depends_on": "eval:doc.customer_exist_in_transaction !== 'Ignore' && doc.customer_in_transaction_doesnt_exist !== 'Ignore'"
   },
   {
    "fieldname": "customer_bank_account_exist_in_transaction",

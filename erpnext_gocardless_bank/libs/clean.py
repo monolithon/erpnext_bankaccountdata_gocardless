@@ -8,22 +8,22 @@ import frappe
 
 
 # [G Bank]
-def enqueue_bank_trash(doc):
+def enqueue_bank_trash(name, company, bank_ref, accounts_ref):
     from .background import is_job_running
     
-    job_id = f"gocardless-bank-trash-{doc.name}"
+    job_id = f"gocardless-bank-trash-{name}"
     if not is_job_running(job_id):
         from .background import enqueue_job
         
-        accounts = [v.bank_account_ref for v in doc.bank_accounts if v.bank_account_ref]
         enqueue_job(
             "erpnext_gocardless_bank.libs.clean.clean_trash",
             job_id,
             queue="long",
-            name=doc.name,
-            bank=doc.bank_ref,
-            company=doc.company,
-            accounts=accounts
+            timeout=20000,
+            name=name,
+            bank=bank_ref,
+            company=company,
+            accounts=accounts_ref
         )
 
 
@@ -35,30 +35,30 @@ def clean_trash(name, bank, company, accounts):
     data = None
     if (
         accounts and (
-            doc.clean_currency or
-            doc.clean_supplier or
-            doc.clean_customer
+            doc._clean_currency or
+            doc._clean_supplier or
+            doc._clean_customer
         )
     ):
         data = get_transactions_data(accounts)
     
-    if accounts and doc.clean_bank_transaction:
+    if accounts and doc._clean_bank_transaction:
         clean_bank_transactions(accounts)
     
-    if accounts and doc.clean_bank_account:
+    if accounts and doc._clean_bank_account:
         clean_bank_accounts(accounts, bank, company)
     
-    if bank and doc.clean_bank:
+    if bank and doc._clean_bank:
         clean_bank(bank)
     
     if data:
-        if doc.clean_currency and data["currency"]:
+        if doc._clean_currency and data["currency"]:
             clean_currency(data["currency"])
         
-        if doc.clean_supplier and data["supplier"]:
+        if doc._clean_supplier and data["supplier"]:
             clean_supplier(data["supplier"])
         
-        if doc.clean_customer and data["customer"]:
+        if doc._clean_customer and data["customer"]:
             clean_customer(data["customer"])
     
     clean_sync_log(name)
@@ -177,16 +177,14 @@ def clean_entries(dt, filters):
         ignore_permissions=True,
         strict=False
     )
-    if not names or not isinstance(names, list):
-        return 0
-    
-    for name in names:
-        try:
-            frappe.delete_doc(
-                dt, name,
-                ignore_permissions=True,
-                ignore_missing=True,
-                delete_permanently=True
-            )
-        except Exception:
-            pass
+    if names and isinstance(names, list):
+        for name in names:
+            try:
+                frappe.delete_doc(
+                    dt, name,
+                    ignore_permissions=True,
+                    ignore_missing=True,
+                    delete_permanently=True
+                )
+            except Exception:
+                pass

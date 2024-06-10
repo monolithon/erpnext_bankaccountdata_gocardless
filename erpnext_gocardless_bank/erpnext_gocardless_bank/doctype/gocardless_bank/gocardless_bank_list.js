@@ -13,35 +13,33 @@ frappe.listview_settings['Gocardless Bank'] = {
     onload: function(list) {
         frappe.gc()
             .on('ready change', function() { this.setup_list(list); })
-            .once('page_change page_pop', function() { delete this.account_link_clicked; })
+            .once('page_change', function() { delete this.account_link_clicked; })
             .once('ready', function() {
-                if (
-                    !this.is_enabled
-                    || !frappe.has_route_options()
-                    || !this.$isStrVal(frappe.route_options.ref)
-                ) return;
-                let ref_id = frappe.route_options.ref,
-                key = 'gocardless_' + ref_id;
-                delete frappe.route_options.ref;
-                if (!this.cache().has(key)) return;
-                let auth = this.cache().pop(key);
-                if (this.$isStrVal(auth)) auth = this.$parseJson(auth);
-                if (!this.$isDataObj(auth) || !auth.name || !auth.bank || !auth.id || !auth.expiry) return;
-                this.request(
-                    'save_bank_link',
+                var ret = this.check_auth();
+                if (ret.disabled || ret.no_route) return;
+                if (ret.invalid_ref) return this.error(__('Authorization reference ID is invalid.'));
+                if (ret.not_found) return this.error(__('Authorization data is missing.'));
+                if (ret.invalid_data) {
+                    frappe.gc()._error('Invalid authorization data.', ret.data);
+                    return this.error(__('Authorization data is invalid.'));
+                }
+                ret = ret.data;
+                this.save_auth(
                     {
-                        name: cstr(auth.name),
-                        auth_id: auth.id,
-                        auth_expiry: auth.expiry,
+                        name: ret.name,
+                        bank: ret.bank,
+                        bank_id: ret.bank_id,
+                        auth_id: ret.auth_id,
+                        auth_expiry: ret.auth_expiry,
                     },
                     function(ret) {
-                        if (!ret) return this.error(__('Unable to link bank account to {0}.', [auth.bank]));
-                        this.success_(__('{0} is linked successfully', [auth.bank]));
+                        if (!ret) return this.error(__('Unable to store bank authorization for "{0}".', [ret.name]));
+                        this.success_(__('{0} has been authorized successfully.', [ret.name]));
                         list.refresh();
                     },
                     function(e) {
-                        this._error('Failed to link bank account.', auth, e.message);
-                        this.error(__('Failed to link bank account to {0}.', [auth.bank]));
+                        this._error('Failed to store bank authorization.', ret, e.message);
+                        this.error(e.self ? e.message : __('Failed to store bank authorization.', [ret.name]));
                     }
                 );
             });

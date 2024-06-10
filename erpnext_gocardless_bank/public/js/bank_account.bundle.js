@@ -23,8 +23,8 @@ frappe.ui.form.on('Bank Account', {
     },
     refresh: function(frm) {
         if (frm.doc.__needs_refresh) return frm.reload_doc();
-        if (frm._gc) frm.events.gc_check_status(frm);
-        else if (frm._gc_refresh == null) frm._gc_refresh = 1;
+        if (!frm._gc) frm._gc_refresh = 1;
+        else frm.events.gc_check_status(frm);
     },
     gc_check_status: function(frm) {
         if (frm.is_new() || !frm._gc) return;
@@ -57,26 +57,21 @@ frappe.ui.form.on('Bank Account', {
     },
     gc_setup_error: function(frm) {
         frm._gc.error = 1;
-        frappe.gc().real(
-            'bank_error',
-            function(ret) {
-                if (!frm._gc.enabled) return;
-                this._log('error event received');
-                if (
-                    !this.$isDataObj(ret) || !this.$isStrVal(ret.error)
-                    || (
-                        ret.any == null
-                        && (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.doc.name))
-                        && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
-                    )
-                ) this._error('Invalid error data received', ret);
-                else {
-                    this.error(ret.error);
-                    delete frm._gc.fields;
-                    frm.reload_doc();
-                }
-            }
-        );
+        frappe.gc().real('bank_error', function(ret) {
+            if (!this.is_enabled) return;
+            this._log('error event received');
+            if (
+                !this.$isDataObj(ret) || !this.$isStrVal(ret.error)
+                || (
+                    ret.any == null
+                    && (!this.$isStrVal(ret.name) || ret.name !== cstr(frm.doc.name))
+                    && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
+                )
+            ) return this._error('Invalid error data received', ret);
+            this.error(ret.error);
+            delete frm._gc.fields;
+            frm.reload_doc();
+        });
     },
     gc_load_toolbar: function(frm, del) {
         let label = __('Sync');
@@ -121,17 +116,10 @@ frappe.ui.form.on('Bank Account', {
                 }
                 let status = ret.status.toLowerCase(),
                 color = 'green';
-                if (
-                    status === 'error'
-                    || status === 'expired'
-                    || status === 'suspended'
-                ) color = 'red';
-                else if (
-                    status === 'discovered'
-                    || status === 'processing'
-                ) color = 'blue';
+                if ('error expired suspended'.indexOf(status) >= 0) color = 'red';
+                else if ('discovered processing'.indexOf(status) >= 0) color = 'blue';
                 frm.set_intro(
-                    __('Linked to Gocardless (Status: <strong>{0}</strong>).', [ret.status]),
+                    __('Linked to Gocardless [<strong>{0}</strong>].', [__(ret.status)]),
                     color
                 );
                 if (
@@ -194,17 +182,15 @@ frappe.ui.form.on('Bank Account', {
             if (to_dt) args.to_dt = to_dt;
         }
         frappe.gc().request(
-            'enqueue_bank_transactions_sync',
-            args,
+            'enqueue_bank_transactions_sync', args,
             function(ret) {
                 frm._gc.btn.prop('disabled', false);
-                if (this.$isDataObj(ret) && ret.error) return this.error_(ret.error);
                 if (!ret) {
                     this._error('Accounts: bank account sync failed');
                     return this.error_(__('Unable to sync the bank account "{0}".', [frm.docname]));
                 }
                 this._log('Accounts: bank account sync success');
-                if (ret.info) this.info_(ret.info);
+                if (this.$isDataObj(ret) && ret.info) this.info_(ret.info);
                 else this.success_(__('Bank account "{0}" is syncing in background', [frm.docname]));
             },
             function(e) {
