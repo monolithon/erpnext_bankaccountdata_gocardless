@@ -60,3 +60,4 @@ def update_access_data(row, client, _all=False):
         seconds=cint(data["access_expires"]),
         as_string=True
     )
+    return 1

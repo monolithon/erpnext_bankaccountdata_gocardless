@@ -272,69 +272,69 @@ class Api:
     
     
     errors = {
-        "list": ["access_scope", "agreement", "redirect"],
-        "main": ["institution_id", "redirect"],
-        "fields": [
-            "institution_id",
-            "max_historical_days",
-            "access_valid_for_days",
-            "agreement",
-            "user_language",
-            "reference",
-            "ssn",
-            "account_selection",
-        ]
+        "list": {
+            "many": [
+                "access_scope",
+                "agreement",
+                "redirect"
+            ],
+            "single": [
+                "max_historical_days",
+                "access_valid_for_days"
+            ],
+            "str": [
+                "redirect",
+                "institution_id"
+            ]
+        },
+        "dict": {
+            "group": [
+                "institution_id",
+                "agreement",
+                "reference",
+                "user_language",
+                "ssn",
+                "account_selection"
+            ]
+        }
     }
     
     
     @staticmethod
     def parse_error(data):
-        err = {
-            "error": 1,
-            "title": "Response Error",
-            "message": "Api response received is invalid.",
-        }
-        if not data or not isinstance(data, dict):
-            return err
-        
-        for k in Api.errors["list"]:
+        if data and isinstance(data, dict):
+            if "summary" in data and "detail" in data:
+                err = {"error": data.pop("summary")}
+                if err["error"] != data["detail"]:
+                    err["detail"] = data.pop("detail")
+                return err
+            
             if (
-                k in data and isinstance(data[k], list) and
-                data[k] and isinstance(data[k][0], dict)
+                "id" in data and "aspsp_identifier" in data and
+                "status" in data and data["status"] == "ERROR"
             ):
-                return {
-                    "error": 1,
-                    "list": [Api.parse_error(v) for v in data[k]]
-                }
+                return {"error": "Account state does not support this operation."}
+            
+            for k in Api.errors["list"]["many"]:
+                if data.get(k, "") and isinstance(data[k], list):
+                    return [Api.parse_error(v) for v in data.pop(k)]
+            
+            for k in Api.errors["list"]["single"]:
+                if data.get(k, "") and isinstance(data[k], list):
+                    return Api.parse_error(data.pop(k)[0])
+            
+            for k in Api.errors["list"]["str"]:
+                if (
+                    data.get(k, "") and isinstance(data[k], list) and
+                    isinstance(data[k][0], str) and data[k][0]
+                ):
+                    return {"error": data.pop(k)[0]}
+            
+            for k in Api.errors["dict"]["group"]:
+                if (
+                    data.get(k, "") and isinstance(data[k], dict) and
+                    "summary" in data[k] and "detail" in data[k]
+                ):
+                    return Api.parse_error(data.pop(k))
         
-        from .common import to_json
-        
-        parsed = False
-        for k in Api.errors["main"]:
-            if k in data and isinstance(data[k], list):
-                jdata = to_json(data)
-                if jdata:
-                    data = {"detail": jdata}
-                    parsed = True
-                    break
-        
-        if not parsed:
-            for k in Api.errors["fields"]:
-                if k in data and isinstance(data[k], dict):
-                    data = data[k]
-                    break
-        
-        if "summary" in data:
-            err["title"] = data["summary"]
-            if "type" in data:
-                err["title"] = data["type"] + " - " + err["title"]
-        elif "id" in data and "status" in data:
-            err["title"] = "Account state error"
-            err["message"] = "Account state does not support this operation."
-        
-        if "detail" in data:
-            err["message"] = data["detail"]
-        elif "country" in data:
-            err["message"] = data["country"][0]
-        
-        return err
+        return {"error": "Api response received is invalid."}

@@ -68,9 +68,7 @@ def get_client(company: str, doc=None):
             break
     
     if not row:
-        return {
-            "error": _("No Gocardless authorized access for company \"{0}\".").format(company)
-        }
+        return {"error": _("No Gocardless authorized access for company \"{0}\".").format(company)}
     
     from .access import update_access
     from .gocardless import Gocardless
@@ -78,9 +76,7 @@ def get_client(company: str, doc=None):
     client = Gocardless()
     ret = update_access(row, client)
     if ret == -1:
-        return {
-            "error": _("Unable to gain authorized access to Gocardless for company \"{0}\".").format(company)
-        }
+        return {"error": _("Unable to authorize access to Gocardless for company \"{0}\".").format(company)}
     
     if ret:
         doc.save(ignore_permissions=True)

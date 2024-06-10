@@ -218,8 +218,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 
                 this.is_debug && ret.unshift({
                     id: 'SANDBOXFINANCE_SFIN0000',
-                    name: 'Testing Sandbox Finance',
-                    logo: 'https://cdn.iconscout.com/icon/free/png-512/free-s-characters-character-alphabet-letter-36031.png?w=512',
+                    name: 'Testing Sandbox Finance'
                 });
                 
                 frappe.gc_banks.store(key, ret);
@@ -330,7 +329,7 @@ frappe.gc_banks = {
         if (!this.field) return;
         this.key = null;
         this.data = null;
-        let val = frm && !frm.is_new() ? cstr(frm.doc.bank) : '';
+        let val = !frm.is_new() ? cstr(frm.doc.bank) : '';
         this.field.set_data(val.length ? [{label: __(val), value: val}] : []);
     },
     get: function(name) {
@@ -362,17 +361,17 @@ frappe.gc_banks = {
     },
     build_item: function(item, data) {
         if (!data) data = item;
-        if (!data.label) data.label = __(data.value);
+        if (!data.label) data.label = data.value;
         let obj = this.get(data.value),
         html = '<strong>' + data.label + '</strong>',
         img = '<img src="{0}" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
         label = data.label,
         logo = 'https://placehold.co/100x100/4b535a/fff/png?text=' + label[0];
-        if (obj && frappe.gc().$isStrVal(obj.logo)) {
-            label = __(obj.name);
-            logo = frappe.gc().image().load(obj.logo, 18, 18, this.time);
+        if (obj && frappe.gc().$isStrVal(obj.id)) {
+            label = obj.name;
+            logo = frappe.gc().image().load('https://cdn-logos.gocardless.com/ais/' + obj.id + '.png', 18, 18, this.time);
         }
-        html = img.replace('{0}', logo).replace('{1}', label) + html;
+        html = img.replace('{0}', logo).replace('{1}', __(label)) + html;
         if (data.description) html += '<br><span class="small">' + __(data.description) + '</span>';
         return $('<li></li>')
             .data('item.autocomplete', data)

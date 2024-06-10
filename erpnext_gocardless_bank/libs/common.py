@@ -25,7 +25,7 @@ else:
     _LOGGER_INFO = None
 
 
-# [G Bank, Bank, Bank Account, Bank Account Type, Gocardless, Schedule]
+# [Bank, Bank Account, Bank Account Type, Gocardless, Schedule]
 def store_error(data):
     if _LOGGER_ERROR:
         _LOGGER_ERROR.error(data)
@@ -37,7 +37,7 @@ def store_info(data):
         _LOGGER_INFO.info(data)
 
 
-# [G Bank, Bank Account, Bank Account Type, Gocardless, Schedule]
+# [Bank Account, Bank Account Type, Gocardless, Schedule]
 def log_error(text):
     text = get_str(text)
     if text:

@@ -105,6 +105,11 @@ class GocardlessBank(Document):
             self._error(_("Submitted bank can't be removed."))
         
         clear_doc_cache(self.doctype, self.name)
+        if self.auth_id:
+            from erpnext_gocardless_bank.libs import remove_bank_auth
+            
+            remove_bank_auth(self.company, self.auth_id)
+        
         if self.bank_ref:
             from erpnext_gocardless_bank.libs import enqueue_bank_trash
             
@@ -163,32 +168,9 @@ class GocardlessBank(Document):
         if self.is_new() or self.has_value_changed("bank"):
             from erpnext_gocardless_bank.libs import get_banks
             
-            banks = get_banks(self.company, self.country)
+            banks = get_banks(self.company, self.country, raw=True)
             if not banks:
                 self.flags.bank_validate_error = 1
-                return self._reset_bank()
-            
-            if not isinstance(banks, list):
-                from erpnext_gocardless_bank.libs import (
-                    store_error,
-                    log_error
-                )
-                
-                err = None
-                if isinstance(banks, dict) and banks.get("error", ""):
-                    err = banks["error"]
-                
-                if not err:
-                    from erpnext_gocardless_bank.libs import store_error
-                    
-                    store_error({
-                        "error": "Gocardless banks list received is invalid.",
-                        "data": banks
-                    })
-                    err = _("Gocardless banks list received is invalid.")
-                
-                self.flags.bank_validate_error = 1
-                log_error(err)
                 return self._reset_bank()
             
             for i in range(len(banks)):

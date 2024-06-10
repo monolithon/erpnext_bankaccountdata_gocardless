@@ -10,7 +10,7 @@ from frappe import _
 
 # [G Bank, G Bank Form]
 @frappe.whitelist()
-def get_banks(company, country=None, pay_option=0):
+def get_banks(company, country=None, pay_option=0, raw=False):
     if (
         not company or not isinstance(company, str) or
         (country and not isinstance(country, str)) or
@@ -62,6 +62,9 @@ def get_banks(company, country=None, pay_option=0):
         from .cache import set_cache
         
         set_cache(dt, key, data, 2 * 24 * 60 * 60)
+    
+    if raw and not isinstance(data, list):
+        return None
     
     return data
 
@@ -190,6 +193,15 @@ def add_bank(bank: str):
             "exception": str(exc)
         })
         return None
+
+
+# [G Bank]
+def remove_bank_auth(company, auth_id):
+    from .system import get_client
+    
+    client = get_client(company)
+    if not isinstance(client, dict):
+        client.remove_bank_link(auth_id)
 
 
 # [Bank Account, Bank Transaction, Internal]

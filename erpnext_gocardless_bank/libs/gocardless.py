@@ -26,13 +26,15 @@ class Gocardless:
         self.token = None
     
     
+    # [Access]
     def connect(self, secret_id: str, secret_key: str):
         if (
             not secret_id or not isinstance(secret_id, str) or
             not secret_key or not isinstance(secret_key, str)
         ):
-            self._log_error(_("Gocardless secret id or key is invalid."))
-            return None
+            err = _("Gocardless secret id or key is invalid.")
+            self._log_error(err)
+            return {"error": err}
         
         data = self._send(
             Api.new_token,
@@ -56,13 +58,16 @@ class Gocardless:
             not isinstance(data["refresh_expires"], (str, int))
         ):
             self._store_error({"error": "Invalid token received.", "data": data})
-            self._log_error(_("Gocardless token received is invalid."))
-            return None
+            err = _("Gocardless token received is invalid.")
+            self._log_error(err)
+            return {"error": err}
         
         self.access = data["access"]
         self.token = data
+        return data
     
     
+    # [Access]
     def set_access(self, token: str):
         if not token or not isinstance(token, str):
             self._log_error(_("Gocardless access token is invalid."))
@@ -70,10 +75,12 @@ class Gocardless:
         self.access = token
     
     
+    # [Access]
     def get_token(self):
         return self.token
     
     
+    # [Access]
     def refresh(self, token: str):
         if not token or not isinstance(token, str):
             self._log_error(_("Gocardless refresh token is invalid."))
@@ -85,7 +92,7 @@ class Gocardless:
             auth=False
         )
         if data is None or "error" in data:
-            return data
+            return None
         
         if (
             not data.get("access", "") or
@@ -101,15 +108,17 @@ class Gocardless:
         self.token = data
     
     
-    def get_banks(self, country: str|None=None, pay_option: int=0):
+    # [Bank]
+    def get_banks(self, country: str=None, pay_option: int=0):
         data = self._send(Api.list_banks(country, pay_option), is_list=True)
         if data is None or "error" in data:
             return data
         
         if not data:
             self._store_error({"error": "Emply banks list received.", "data": data})
-            self._log_error(_("Gocardless banks list received is empty."))
-            return None
+            err = _("Gocardless banks list received is empty.")
+            self._log_error(err)
+            return {"error": err}
         
         for v in data:
             if (
@@ -120,18 +129,24 @@ class Gocardless:
                 not isinstance(v["name"], str)
             ):
                 self._store_error({"error": "Invalid banks list received.", "data": data})
-                self._log_error(_("Gocardless banks list received is invalid."))
-                return None
+                err = _("Gocardless banks list received is invalid.")
+                self._log_error(err)
+                return {"error": err}
         
+        keys = ["id", "name", "transaction_total_days"]
         for i in range(len(data)):
             v = data[i]
-            v.pop("countries", 0)
-            if cint(v.get("transaction_total_days", 0)) < 1:
-                v["transaction_total_days"] = self._def_transaction_days
+            if cint(v.get(keys[2], 0)) < 1:
+                v[keys[2]] = self._def_transaction_days
+            
+            for k in v:
+                if k not in keys:
+                    del v[k]
         
         return data
     
     
+    # [Internal]
     def get_bank_agreement(self, bank_id: str, transaction_days: int=None):
         if not transaction_days or cint(transaction_days) < 1:
             transaction_days = self._def_transaction_days
@@ -152,8 +167,9 @@ class Gocardless:
             not isinstance(data["institution_id"], str)
         ):
             self._store_error({"error": "Invalid bank agreement data received.", "data": data})
-            self._log_error(_("Gocardless bank agreement data received for bank id ({0}) is invalid.").format(bank_id))
-            return None
+            err = _("Gocardless bank agreement data received for bank id ({0}) is invalid.").format(bank_id)
+            self._log_error(err)
+            return {"error": err}
         
         if "access_valid_for_days" in data:
             data["access_valid_for_days"] = cint(data["access_valid_for_days"])
@@ -168,6 +184,7 @@ class Gocardless:
         return data
     
     
+    # [Bank]
     def get_bank_link(self, docname: str, ref_id: str, bank_id: str, transaction_days: int=None):
         agreement = self.get_bank_agreement(bank_id, transaction_days)
         if not isinstance(agreement, dict) or "error" in agreement:
@@ -196,8 +213,9 @@ class Gocardless:
             not isinstance(data["link"], str)
         ):
             self._store_error({"error": "Invalid bank link data received.", "data": data})
-            self._log_error(_("Gocardless bank link data received for bank id ({0}) is invalid.").format(bank_id))
-            return None
+            err = _("Gocardless bank link data received for bank id ({0}) is invalid.").format(bank_id)
+            self._log_error(err)
+            return {"error": err}
         
         data["auth_id"] = data.pop("id")
         data["auth_link"] = data.pop("link")
@@ -205,14 +223,13 @@ class Gocardless:
         return data
     
     
+    # [Bank]
     def remove_bank_link(self, auth_id: str):
         data = self._send(Api.bank_accounts(auth_id), method="DELETE")
-        if not (data is None) and "error" in data:
-            return data
-        
-        return None
+        return data if data and "error" in data else None
     
     
+    # [Bank Account]
     def get_accounts(self, auth_id: str):
         data = self._send(Api.bank_accounts(auth_id))
         if data is None or "error" in data:
@@ -236,6 +253,7 @@ class Gocardless:
         return accounts
     
     
+    # [Bank Account]
     def get_account_data(self, account_id: str):
         data = self._send(Api.account_data(account_id))
         if data is None or "error" in data:
@@ -276,6 +294,7 @@ class Gocardless:
         return data
     
     
+    # [Bank Account]
     def get_account_balances(self, account_id: str):
         data = self._send(Api.account_balances(account_id))
         if data is None or "error" in data:
@@ -342,6 +361,7 @@ class Gocardless:
         return balances
     
     
+    # [Bank Account]
     def get_account_details(self, account_id: str):
         data = self._send(Api.account_details(account_id))
         if data is None or "error" in data:
@@ -365,7 +385,8 @@ class Gocardless:
         return details
     
     
-    def get_account_transactions(self, account_id: str, date_from: str|None=None, date_to: str|None=None):
+    # [Bank Transaction]
+    def get_account_transactions(self, account_id: str, date_from: str=None, date_to: str=None):
         data = self._send(Api.account_transactions(account_id, date_from, date_to))
         if data is None or "error" in data:
             return data
@@ -406,12 +427,13 @@ class Gocardless:
         return data
     
     
+    # [Bank Transaction]
     @staticmethod
     def prepare_entries(data: list|dict):
         return Api.prepare_transactions(data)
     
     
-    def _send(self, uri: str, data: dict|None=None, auth: bool=True, is_list: bool=False, method: str|None=None):
+    def _send(self, uri: str, data: dict=None, auth: bool=True, is_list: bool=False, method: str=None):
         url = f"{Api.url}{uri}"
         if data:
             from .common import to_json
@@ -427,8 +449,9 @@ class Gocardless:
         
         if auth or is_post:
             if auth and not self.access:
-                self._log_error(_("Gocardless access token is missing."))
-                return None
+                err = _("Gocardless access token is missing.")
+                self._log_error(err)
+                return {"error": err}
             
             headers = headers.copy()
             if auth:
@@ -449,15 +472,14 @@ class Gocardless:
                 "method": method,
                 "data": data
             })
-            self._log_error(_("Gocardless request failed. {0}").format(str(exc)))
-            return None
+            err = _("Gocardless request failed. {0}").format(str(exc))
+            self._log_error(err)
+            return {"error": err}
         
         response = self._parse_json(response)
         if status not in Api.valid_status_codes:
-            err = Api.parse_error(response)
-            self._store_error(err.copy().update({"data": response}))
-            self._report_error(err)
-            return err
+            err = self._report_error(response)
+            return {"error": err}
         
         if is_delete:
             return None
@@ -473,47 +495,35 @@ class Gocardless:
                 "data": data,
                 "response": response
             })
-            self._log_error(_("Gocardless response received is invalid."))
-            return None
+            err = _("Gocardless response received is invalid.")
+            self._log_error(err)
+            return {"error": err}
         
         return response
     
     
-    def _report_error(self, data):
-        if "list" not in data:
-            data = {"list": data}
-        if not isinstance(data["list"], list):
-            data["list"] = [data["list"]]
-        
-        err = []
-        raw = []
-        for v in data["list"]:
-            msg = None
-            if isinstance(v, dict):
-                msg = []
-                if "title" in v:
-                    msg.append(_(v["title"]))
-                else:
-                    msg.append(_("Error"))
-                if "message" in v:
-                    msg.append(_(v["message"]))
-                else:
-                    msg.append(_("No error message"))
+    @staticmethod
+    def _report_error(response):
+        error = Api.parse_error(response)
+        if isinstance(error, dict) and "error" in error:
+            err = error.pop("error").strip(".") + "."
+        elif isinstance(error, list):
+            err = []
+            for i in range(len(error)):
+                v = error.pop(0)
+                if isinstance(v, dict) and "error" in v:
+                    err.append(v.pop("error").strip(".") + ".")
             
-            if msg:
-                msg = ": ".join(msg)
-                err.append(msg.strip(".") + ".")
-            else:
-                raw.append(v)
-        
-        if err:
-            err = " ".join(err)
+            err = "\n".join(err) if err else None
         else:
+            err = None
+        
+        if not err:
             err = _("Gocardless error reported has invalid error data.")
         
-        self._log_error(err)
-        if raw:
-            self._store_error({"error": err, "data": raw})
+        Gocardless._log_error(err)
+        Gocardless._store_error({"error": err, "data": response})
+        return err
     
     
     @staticmethod

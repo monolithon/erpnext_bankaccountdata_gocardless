@@ -251,11 +251,10 @@
                     if (!this.$isBaseObj(r) || !r.error) return s && s(r);
                     if (!this.$isBaseObj(r)) r = {};
                     var k = ['list', 'message', 'error', 'self'];
-                    let m = (this.$isArrVal(r[k[0]]) ? this.$map(r[k[0]], function(v) { return __(v); }).join('\n')
-                        : (this.$isStrVal(r[k[1]]) ? __(r[k[1]])
-                        : (this.$isStrVal(r[k[2]]) ? __(r[k[2]]) : '')));
+                    let m = r[k[0]] != null ? r[k[0]] : (r[k[1]] != null ? r[k[1]] : (r[k[2]] != null ? r[k[2]] : null));
+                    m = this.$isArrVal(m) ? this.$map(m, function(v) { return __(v); }).join('\n') : (this.$isStrVal(m) ? __(m) : '');
                     if (!m.trim().length) m = __('The request sent returned an invalid response.');
-                    if (f) r = this.$assign({message: m, self: 1}, this.$filter(r, function(_, x) { return !k.includes(x); }));
+                    if (f) r = this.$assign({message: m, list: m.split('\n'), self: 1}, this.$filter(r, function(_, x) { return !k.includes(x); }));
                     f ? f(r) : this._error(m);
                 }),
                 error: this.$fn(function(r, t) {

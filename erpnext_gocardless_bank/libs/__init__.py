@@ -9,7 +9,8 @@ from .bank import (
     get_bank_auth,
     save_bank_auth,
     add_bank,
-    enqueue_sync_bank
+    enqueue_sync_bank,
+    remove_bank_auth
 )
 from .bank_account import (
     store_bank_account,
