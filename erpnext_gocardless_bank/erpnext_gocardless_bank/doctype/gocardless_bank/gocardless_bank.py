@@ -202,14 +202,14 @@ class GocardlessBank(Document):
     
     def _reset_bank(self, val=None):
         if not val:
-            val = {"id": None, "transaction_total_days": 0}
+            val = {"id": None, "transaction_total_days": self._def_transaction_days}
         
-        if self.bank_id != val["id"]:
+        if not self.bank_id or self.bank_id != val["id"]:
             self.bank_id = val["id"]
         tdays = cint(val["transaction_total_days"])
         if tdays < 1:
             tdays = self._def_transaction_days
-        if cint(self.transaction_days) != tdays:
+        if not self.transaction_days or cint(self.transaction_days) != tdays:
             self.transaction_days = tdays
     
     
