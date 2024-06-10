@@ -202,18 +202,17 @@ frappe.ui.form.on('Gocardless Bank', {
             'get_banks',
             {
                 company: cstr(frm.doc.company),
-                country: key,
-                cache_only: init ? 1 : 0
+                country: key
             },
             function(ret) {
                 if (!this.$isArr(ret)) {
+                    if (init) return frappe.gc_banks.reset(frm);
                     this._error('Invalid banks list.', key, ret);
-                    if (init) return frappe.gc_banks.reset(frm.is_new());
                     return this.error(__('Gocardless banks list received is invalid.'));
                 }
                 if (!this.is_debug && !ret.length) {
+                    if (init) return frappe.gc_banks.reset(frm);
                     this._error('Empty banks list.', ret);
-                    if (init) return frappe.gc_banks.reset(frm.is_new());
                     return this.error(__('Gocardless banks list received is empty.'));
                 }
                 
@@ -227,8 +226,8 @@ frappe.ui.form.on('Gocardless Bank', {
                 frappe.gc_banks.update(key, ret);
             },
             function(e) {
+                if (init) return frappe.gc_banks.reset(frm);
                 this._error('Failed to get banks list.', key, e.message);
-                if (init) return frappe.gc_banks.reset(frm.is_new());
                 this.error(e.self ? e.message : __('Failed to get banks list from Gocardless.'));
             }
         );

@@ -242,12 +242,12 @@ frappe._gc_logs = {
     _toggle: function(key) {
         let $e;
         if (this._elkey) {
-            $e = this._$wrapper.find('.' + this._elkey);
-            !$e.isHidden() && $e.hidden(1);
+            $e = this._$wrapper.find('.' + this._elkey).first();
+            !$e.hasClass('lu-hidden') && $e.toggleClass('lu-hidden', 1);
         }
         this._elkey = key;
-        $e = this._$wrapper.find('.' + this._elkey);
-        $e.isHidden() && $e.hidden(0);
+        $e = this._$wrapper.find('.' + this._elkey).first();
+        $e.hasClass('lu-hidden') && $e.toggleClass('lu-hidden', 0);
     },
     _loading: function() {
         if (!this._tpl.loading) {

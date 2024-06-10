@@ -127,7 +127,7 @@ class Gocardless:
             v = data[i]
             v.pop("countries", 0)
             if cint(v.get("transaction_total_days", 0)) < 1:
-                v["transaction_total_days"] = 90
+                v["transaction_total_days"] = self._def_transaction_days
         
         return data
     

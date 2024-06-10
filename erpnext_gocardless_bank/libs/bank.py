@@ -10,7 +10,7 @@ from frappe import _
 
 # [G Bank, G Bank Form]
 @frappe.whitelist()
-def get_banks(company, country=None, pay_option=0, cache_only=0):
+def get_banks(company, country=None, pay_option=0):
     if (
         not company or not isinstance(company, str) or
         (country and not isinstance(country, str)) or
@@ -49,19 +49,15 @@ def get_banks(company, country=None, pay_option=0, cache_only=0):
         key = f"{key}-pay"
     
     data = get_cache(dt, key, True)
-    if data and isinstance(data, list):
-        return data
+    if not isinstance(data, list):
+        from .system import get_client
+        
+        client = get_client(company)
+        if isinstance(client, dict):
+            return client
+        
+        data = client.get_banks(country, 1 if pay_option else 0)
     
-    if cache_only:
-        return None
-    
-    from .system import get_client
-    
-    client = get_client(company)
-    if isinstance(client, dict):
-        return client
-    
-    data = client.get_banks(country, 1 if pay_option else 0)
     if data and isinstance(data, list):
         from .cache import set_cache
         
