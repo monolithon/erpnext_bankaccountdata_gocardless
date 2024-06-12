@@ -358,14 +358,16 @@ frappe.gc_banks = {
         if (!data.label) data.label = data.value;
         let obj = this.get(data.value),
         html = '<strong>' + data.label + '</strong>',
-        img = '<img src="{0}" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
+        img = '<img id="{0}" src="" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
         label = data.label,
-        logo = 'https://placehold.co/100x100/4b535a/fff/png?text=' + label[0];
+        def_logo = 'https://placehold.co/100x100/4b535a/fff/png?text=' + label[0],
+        logo = def_logo;
         if (obj && frappe.gc().$isStrVal(obj.id)) {
             label = obj.name;
-            logo = frappe.gc().image().load('https://cdn-logos.gocardless.com/ais/' + obj.id + '.png', 18, 18, this.time);
+            logo = obj.logo;
         }
-        html = img.replace('{0}', logo).replace('{1}', __(label)) + html;
+        let id = frappe.gc().image().add(logo, {fall: def_logo, width: 18, height: 18, cache: this.time});
+        html = img.replace('{0}', id).replace('{1}', __(label)) + html;
         if (data.description) html += '<br><span class="small">' + __(data.description) + '</span>';
         return $('<li></li>')
             .data('item.autocomplete', data)

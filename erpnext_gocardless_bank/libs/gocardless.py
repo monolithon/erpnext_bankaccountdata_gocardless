@@ -140,23 +140,19 @@ class Gocardless:
                 self._log_error(err)
                 return {"error": err}
         
-        keys = ["id", "name", "transaction_total_days"]
+        keys = ["id", "name", "transaction_total_days", "logo"]
         for i in range(len(data)):
-            v = data[i]
-            if cint(v.get(keys[2], 0)) < 1:
-                v[keys[2]] = self._def_transaction_days
-            
-            for k in v:
-                if k not in keys:
-                    del v[k]
+            data[i] = {k:data[i][k] for k in keys if k in data[i]}
+            if cint(data[i].get(keys[2], 0)) < 1:
+                data[i][keys[2]] = self._def_transaction_days
         
         if self.is_debug:
-            t = {
-                "id": "SANDBOXFINANCE_SFIN0000",
-                "name": "Testing Sandbox Finance"
-            }
-            t[keys[2]] = self._def_transaction_days
-            data.append(t)
+            data.insert(0, dict(zip(keys, [
+                "SANDBOXFINANCE_SFIN0000",
+                "Testing Sandbox Finance",
+                self._def_transaction_days,
+                "https://cdn-logos.gocardless.com/ais/SANDBOXFINANCE_SFIN0000.png"
+            ])))
         
         return data
     

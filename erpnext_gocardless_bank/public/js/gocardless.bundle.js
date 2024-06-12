@@ -135,7 +135,8 @@
             if (s || (e && o[k] == null)) Object.defineProperty(o, k, s ? {value: v} : {get() { return this['_' + k]; }});
             return this;
         },
-        $hasElem(k) { return !!document.getElementById(k); },
+        $getElem(k) { return document.getElementById(k); },
+        $hasElem(k) { return !!this.$getElem(k); },
         $makeElem(t, o) {
             t = document.createElement(t);
             if (o) for (let k in o) { if (this.$hasProp(k, o)) t[k] = o[k]; }
@@ -919,31 +920,48 @@
         constructor(pfx) {
             this._c = new LevelUpCache(pfx + 'img_');
         }
-        load(u, w, h, t) {
-            if (!LU.$isStrVal(u)) return u;
-            w = LU.$isNum(w) ? w : 0;
-            h = LU.$isNum(h) ? h : 0;
-            let k = u + (w > 0 ? '_w' + w : '') + (h > 0 ? '_h' + h : ''),
+        add(u, o) {
+            if (!LU.$isStrVal(u)) return '';
+            if (!LU.$isBaseObj(o)) o = {};
+            let id = 'lui-' + frappe.utils.get_random(16);
+            $(document).ready(LU.$timeout(this._ready, 700, [id, u, o], this));
+            return id;
+        }
+        _ready(id, u, o) {
+            var $el = LU.$getElem(id);
+            if (!$el) return;
+            $el = $($el);
+            if (!LU.$isStrVal(o.fall)) o.fall = null;
+            o.width = LU.$isNum(o.width) && o.width >= 0 ? o.width : 0;
+            o.height = LU.$isNum(o.height) && o.height >= 0 ? o.height : 0;
+            o.cache = LU.$isNum(o.cache) && o.cache >= 0 ? o.cache : 0;
+            let k = u + (o.width ? '_w' + o.width : '') + (o.height ? '_h' + o.height : ''),
             v = this._c.get(k);
-            if (LU.$isStrVal(v)) return v;
-            try {
-                let i = new Image();
-                i.src = u;
-                i.crossOrigin = 'Anonymous';
-                i.onload = LU.$afn(function(me, k) {
-                    let tw = w > 0 && w < this.width ? w : this.width,
-                    th = h > 0 && h < this.height ? h : this.height,
-                    c = LU.$makeElem('canvas'),
-                    x = c.getContext('2d');
-                    c.width = tw;
-                    c.height = th;
-                    x.drawImage(this, 0, 0, tw, th);
-                    let e = u.split('.').pop().toLowerCase();
-                    e = 'image/' + (e === 'jpg' ? 'jpeg' : e);
-                    me._c.set(k, c.toDataURL(e), t);
-                }, [this, k], i);
-            } catch(_) {}
-            return u;
+            if (LU.$isStrVal(v)) $el.attr('src', v);
+            else this._load($el, k, u, o);
+        }
+        _load($el, k, u, o) {
+            var me = this;
+            let i = new Image();
+            i.src = u;
+            i.crossOrigin = 'Anonymous';
+            i.onload = function() {
+                let tw = o.width && o.width < this.width ? o.width : this.width,
+                th = o.height && o.height < this.height ? o.height : this.height,
+                c = LU.$makeElem('canvas'),
+                x = c.getContext('2d');
+                c.width = tw;
+                c.height = th;
+                x.drawImage(this, 0, 0, tw, th);
+                let e = u.split('.').pop().toLowerCase();
+                e = 'image/' + (e === 'jpg' ? 'jpeg' : e);
+                e = c.toDataURL(e);
+                me._c.set(k, e, o.cache);
+                $el.attr('src', e);
+            };
+            i.onerror = function() {
+                if (o.fall && o.fall !== u) me._load($el, k, o.fall, o);
+            };
         }
     }
     LevelUp.prototype.image = function() { return this._image || (this._image = new LevelUpImage(this._real)); };
