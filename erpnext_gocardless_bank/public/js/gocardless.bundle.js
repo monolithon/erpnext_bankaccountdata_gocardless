@@ -919,22 +919,25 @@
     class LevelUpImage {
         constructor(pfx) {
             this._c = new LevelUpCache(pfx + 'img_');
+            this._h = 'data:image/gif;base64,R0lGODlhAQABAPAAAAAAAAAAACH/C1hNUCBEYXRhWE1QRT94cGFja2V0IDE2MDZCIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOkZERDQ1MzVGMkZGMTExRTFBQTE4OTE5ODk4MQAh+QQFAAAAACwAAAAAAQABAEACAkQBADs=';
         }
         add(u, o) {
-            if (!LU.$isStrVal(u)) return '';
-            if (!LU.$isBaseObj(o)) o = {};
             let id = 'lui-' + frappe.utils.get_random(16);
-            $(document).ready(LU.$timeout(this._ready, 700, [id, u, o], this));
-            return id;
+            if (LU.$isStrVal(u))
+                $(document).ready(LU.$timeout(this._ready, 700, [id, u, o], this));
+            return {id, src: this._h};
         }
         _ready(id, u, o) {
             var $el = LU.$getElem(id);
             if (!$el) return;
             $el = $($el);
-            if (!LU.$isStrVal(o.fall)) o.fall = null;
-            o.width = LU.$isNum(o.width) && o.width >= 0 ? o.width : 0;
-            o.height = LU.$isNum(o.height) && o.height >= 0 ? o.height : 0;
-            o.cache = LU.$isNum(o.cache) && o.cache >= 0 ? o.cache : 0;
+            if (!LU.$isBaseObj(o)) o = {};
+            else {
+                if (!LU.$isStrVal(o.fall)) delete o.fall;
+                if (!LU.$isNum(o.width) || o.width <= 0) delete o.width;
+                if (!LU.$isNum(o.height) || o.height <= 0) delete o.height;
+                if (!LU.$isNum(o.cache) || o.cache <= 0) delete o.cache;
+            }
             let k = u + (o.width ? '_w' + o.width : '') + (o.height ? '_h' + o.height : ''),
             v = this._c.get(k);
             if (LU.$isStrVal(v)) $el.attr('src', v);

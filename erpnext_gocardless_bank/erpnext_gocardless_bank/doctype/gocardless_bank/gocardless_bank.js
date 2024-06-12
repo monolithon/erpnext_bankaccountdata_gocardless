@@ -358,7 +358,7 @@ frappe.gc_banks = {
         if (!data.label) data.label = data.value;
         let obj = this.get(data.value),
         html = '<strong>' + data.label + '</strong>',
-        img = '<img id="{0}" src="" alt="{1}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
+        img = '<img id="{0}" src="{1}" alt="{2}" style="width:18px;height:18px;border:1px solid #6c757d;border-radius:50%;"/> ',
         label = data.label,
         def_logo = 'https://placehold.co/100x100/4b535a/fff/png?text=' + label[0],
         logo = def_logo;
@@ -366,8 +366,8 @@ frappe.gc_banks = {
             label = obj.name;
             logo = obj.logo;
         }
-        let id = frappe.gc().image().add(logo, {fall: def_logo, width: 18, height: 18, cache: this.time});
-        html = img.replace('{0}', id).replace('{1}', __(label)) + html;
+        let iobj = frappe.gc().image().add(logo, {fall: def_logo, width: 18, height: 18, cache: this.time});
+        html = img.replace('{0}', iobj.id).replace('{1}', iobj.src).replace('{2}', __(label)) + html;
         if (data.description) html += '<br><span class="small">' + __(data.description) + '</span>';
         return $('<li></li>')
             .data('item.autocomplete', data)
