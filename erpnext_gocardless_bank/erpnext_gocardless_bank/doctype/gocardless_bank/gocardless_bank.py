@@ -76,17 +76,19 @@ class GocardlessBank(Document):
             from erpnext_gocardless_bank.libs import add_bank
             
             ref = add_bank(self.bank)
-            if ref:
-                from erpnext_gocardless_bank.libs import enqueue_sync_bank
-                
-                self.bank_ref = ref
-                self.save(ignore_permissions=True)
-                enqueue_sync_bank(self.name, self.bank, self.company, self.auth_id)
-            else:
+            if not ref:
                 self._error(_("Unable to add \"{0}\" to ERPNext.").format(self.bank))
+            
+            self.bank_ref = ref
+            self.flags.sync_bank = 1
     
     
     def on_update_after_submit(self):
+        if self.flags.get("sync_bank", 0):
+            from erpnext_gocardless_bank.libs import enqueue_sync_bank
+            
+            enqueue_sync_bank(self.name, self.bank, self.company, self.auth_id)
+        
         self._clean_flags()
     
     
@@ -106,11 +108,19 @@ class GocardlessBank(Document):
         
         clear_doc_cache(self.doctype, self.name)
         if self.auth_id:
+            self.flags.remove_auth = 1
+        
+        if self.bank_ref:
+            self.flags.trash_bank = 1
+    
+    
+    def after_delete(self):
+        if self.flags.get("remove_auth", 0):
             from erpnext_gocardless_bank.libs import remove_bank_auth
             
             remove_bank_auth(self.company, self.auth_id)
         
-        if self.bank_ref:
+        if self.flags.get("trash_bank", 0):
             from erpnext_gocardless_bank.libs import enqueue_bank_trash
             
             enqueue_bank_trash(
@@ -119,9 +129,7 @@ class GocardlessBank(Document):
                 self.bank_ref,
                 [v.bank_account_ref for v in self.bank_accounts if v.bank_account_ref]
             )
-    
-    
-    def after_delete(self):
+        
         self._clean_flags()
     
     
@@ -209,6 +217,9 @@ class GocardlessBank(Document):
             "defaults_set",
             "bank_validate_error",
             "bank_support_error",
+            "sync_bank",
+            "remove_auth",
+            "trash_bank",
             "status_checked"
         ]
         for i in range(len(keys)):
