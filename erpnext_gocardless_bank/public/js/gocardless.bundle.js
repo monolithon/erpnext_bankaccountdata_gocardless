@@ -194,8 +194,8 @@
             (x === 'fatal' && (this._err = 1) ? frappe.throw : frappe.msgprint)(t);
             return this;
         }
-        debug(t, m) { return !this.is_debug ? this : this.$alert(t, m, 'gray', 'debug'); }
-        log(t, m) { return !this.is_debug ? this : this.$alert(t, m, 'cyan', 'log'); }
+        debug(t, m) { return this.is_debug ? this.$alert(t, m, 'gray', 'debug') : this; }
+        log(t, m) { return this.is_debug ? this.$alert(t, m, 'cyan', 'log') : this; }
         info(t, m) { return this.$alert(t, m, 'light-blue', 'info'); }
         warn(t, m) { return this.$alert(t, m, 'orange', 'warn'); }
         error(t, m) { return this.$alert(t, m, 'red', 'error'); }
@@ -1049,6 +1049,7 @@
             );
         }
         check_auth() {
+            if (!this.is_ready) return {not_ready: 1};
             if (!this.is_enabled) return {disabled: 1};
             if (!frappe.has_route_options() || frappe.route_options.ref == null) return {no_route: 1};
             let ref = frappe.route_options.ref;

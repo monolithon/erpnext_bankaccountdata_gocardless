@@ -80,14 +80,18 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     check_doc: function(frm) {
         frm._bank.inits.doc = 1;
-        let is_new = frm.is_new(),
-        docstatus = !is_new ? cint(frm.doc.docstatus) : 0;
-        frm._bank.is_draft = is_new || docstatus === 0;
-        frm._bank.is_submitted = !is_new && docstatus === 1;
-        frm._bank.is_cancelled = !is_new && docstatus === 2;
+        let docstatus = cint(frm.doc.docstatus);
+        frm._bank.is_draft = docstatus === 0;
+        frm._bank.is_submitted = docstatus === 1;
+        frm._bank.is_cancelled = docstatus === 2;
     },
     check_status: function(frm) {
         !frm._bank.inits.doc && frm.events.check_doc(frm);
+        frappe.gc()._log('Form doc status', {
+            draft: frm._bank.is_draft,
+            submitted: frm._bank.is_submitted,
+            cancelled: frm._bank.is_cancelled
+        });
         if (frm._bank.is_cancelled) return;
         let setup = !frm._bank.inits.setup;
         setup && frm.events.load_banks(frm, 1);
@@ -95,10 +99,11 @@ frappe.ui.form.on('Gocardless Bank', {
         frm._bank.inits.auth = frappe.gc().$isStrVal(frm.doc.auth_id)
             && frappe.gc().$isStrVal(frm.doc.auth_expiry)
             && cstr(frm.doc.auth_status) !== 'Unlinked' ? 1 : 0;
+        frappe.gc()._log('Form auth status', frm._bank.inits.auth);
         if (!frm._bank.inits.auth) {
             frm._bank.inits.sync && frm.events.setup_sync_data(frm, 1);
-            if (!frm._bank.inits.link) frm.events.check_link(frm);
-            else !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
+            !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
+            !frm._bank.inits.link && frm.events.check_link(frm);
         } else {
             if (!frm._bank.inits.reload_accounts) {
                 frm._bank.inits.reload_accounts = 1;
@@ -122,17 +127,16 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     check_link: function(frm) {
         let ret = frappe.gc().check_auth();
+        if (ret.not_ready) return frappe.gc().$timeout(function() {
+            frm.events.check_link(frm);
+        }, 300);
         if (ret.disabled) return;
         frm._bank.inits.link = 1;
-        if (ret.no_route) return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
-        if (ret.invalid_ref) {
-            frappe.gc().error(__('Authorization reference ID is invalid.'));
-            return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
-        }
-        if (ret.not_found) {
-            frappe.gc().error(__('Authorization data is missing.'));
-            return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
-        }
+        if (ret.no_route) return;
+        if (ret.invalid_ref)
+            return frappe.gc().error(__('Authorization reference ID is invalid.'));
+        if (ret.not_found)
+            return frappe.gc().error(__('Authorization data is missing.'));
         if (
             ret.invalid_data
             || ret.data.name !== cstr(frm.docname)
@@ -140,9 +144,9 @@ frappe.ui.form.on('Gocardless Bank', {
             || ret.data.bank_id !== cstr(frm.doc.bank_id)
         ) {
             frappe.gc()._error('Invalid authorization data.', ret.data);
-            frappe.gc().error(__('Authorization data is invalid.'));
-            return !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
+            return frappe.gc().error(__('Authorization data is invalid.'));
         }
+        frm._bank.inits.bar && frm.events.setup_toolbar(frm, 1);
         ret = ret.data;
         frappe.gc().save_auth(
             {
@@ -198,6 +202,7 @@ frappe.ui.form.on('Gocardless Bank', {
         !frappe.gc_banks.field && frappe.gc_banks.setup(frm);
         let data = frappe.gc_banks.load(key);
         if (data) return frappe.gc_banks.update(key, data);
+        if (!frm._bank.is_draft) return frappe.gc_banks.reset(frm);
         frappe.gc().request(
             'get_banks',
             {
@@ -237,11 +242,13 @@ frappe.ui.form.on('Gocardless Bank', {
         let label = __('Authorize');
         if (frm.custom_buttons[label]) {
             if (!clear) return;
+            frappe.gc()._log('Remove auth button');
             frm.custom_buttons[label].remove();
             delete frm.custom_buttons[label];
             delete frm._bank.inits.bar;
         }
         if (clear || frm._bank.inits.bar) return;
+        frappe.gc()._log('Setup auth button');
         frm._bank.inits.bar = 1;
         frm.add_custom_button(label, function() {
             var name = cstr(frm.docname),
@@ -320,6 +327,7 @@ frappe.gc_banks = {
         this.field.translate_values = false;
     },
     reset: function(frm) {
+        if (!this.field) this._get_field(frm);
         if (!this.field) return;
         this.key = null;
         this.data = null;
@@ -333,14 +341,12 @@ frappe.gc_banks = {
         }
     },
     setup: function(frm) {
-        if (this.field) return;
-        let field = frm.get_field('bank');
-        if (!field) return frappe.gc()._error('Unable to get bank field.');
-        let awesomplete = field.awesomplete;
+        if (this.field || !frm._bank.is_draft) return;
+        if (!this.field) this._get_field(frm);
+        if (!this.field) return;
+        let awesomplete = this.field.awesomplete;
         if (!awesomplete || !frappe.gc().$isFunc(awesomplete.item))
             return frappe.gc()._error('Unable to get bank field awesomplete.');
-        
-        this.field = field;
         awesomplete.__item = awesomplete.item;
         awesomplete.item = function(item) {
             if (cur_frm && cur_frm.doctype === 'Gocardless Bank' && frappe.gc_banks)
@@ -380,6 +386,11 @@ frappe.gc_banks = {
             if (frappe.gc().$hasProp(k, this)) delete this[k];
         }
     },
+    _get_field: function(frm) {
+        let field = frm.get_field('bank');
+        if (field) this.field = field;
+        else frappe.gc()._error('Unable to get bank field.');
+    }
 };
 
 
