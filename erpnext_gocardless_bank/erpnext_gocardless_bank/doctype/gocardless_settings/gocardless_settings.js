@@ -181,8 +181,11 @@ frappe._gc_logs = {
         this._$el.off('click', 'button.refresh-logs', this._handlers.refresh);
         this._$el.off('click', 'button.view-log', this._handlers.view);
         this._$el.empty();
-        try { this._dialog && this._dialog.dialog('destroy'); } catch(_) {}
-        try { this._dialog.$wrapper && this._dialog.$wrapper.remove(); } catch(_) {}
+        if (this._dialog) {
+            try { this._dialog.hide(); } catch(_) {}
+            try { this._dialog.$wrapper.modal('dispose'); } catch(_) {}
+            try { this._dialog.wrapper.remove(); } catch(_) {}
+        }
         this._tpl = {};
         this._elkey = null;
         delete this._destroy;

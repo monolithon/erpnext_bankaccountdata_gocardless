@@ -433,7 +433,7 @@ frappe.gc_accounts = {
         }
         if (this._balance_dialog) {
             try { this._balance_dialog.hide(); } catch(_) {}
-            try { this._balance_dialog.modal('dispose'); } catch(_) {}
+            try { this._balance_dialog.$wrapper.modal('dispose'); } catch(_) {}
             try { this._balance_dialog.wrapper.remove(); } catch(_) {}
         }
         if (this._dialog) {
@@ -442,7 +442,7 @@ frappe.gc_accounts = {
                 this._dialog.modal_body.off('click', 'button.gc-new-account', this._dialog.gc.on_new_click);
                 this._dialog.modal_body.off('click', 'button.gc-link-account', this._dialog.gc.on_link_click);
             } catch(_) {}
-            try { this._dialog.modal('dispose'); } catch(_) {}
+            try { this._dialog.$wrapper.modal('dispose'); } catch(_) {}
             try { this._dialog.wrapper.remove(); } catch(_) {}
         }
         if (this._field) try { this._field.$wrapper.empty(); } catch(_) {}

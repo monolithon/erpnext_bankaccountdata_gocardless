@@ -108,7 +108,7 @@
                 : (l < 4 ? fn.call(o, a[0], a[1], a[2]) : fn.apply(o, a))));
         },
         $try(fn, a, o) { try { return this.$call(fn, a, o); } catch(e) { console.error(e.message, e.stack); } },
-        $xtry(fn, a, o) { return this.$afn(this.$try, [fn, a, o]); },
+        $xtry(fn, a, o) { return this.fn(function() { return this.try(fn, a, o); }); },
         $timeout(fn, tm, a, o) {
             return tm != null ? setTimeout(this.$afn(fn, a, o), tm) : ((fn && clearTimeout(fn)) || this);
         },
@@ -839,15 +839,17 @@
         }
         has(k) { return this._get(k) != null; }
         get(k) {
-            let v = this._get(k), t;
-            if (v == null || (t = LU.$parseJson(v)) == null) return v;
+            let v = this._get(k);
+            if (v == null) return;
+            let t = LU.$parseJson(v);
+            if (t == null) return v;
             if (t.___ == null) return t;
-            t.e != null && t.e < (new Date()).getTime() && this.del(k) && (t = null);
-            return t ? t.___ : t;
+            if (t.e == null || t.e >= (new Date()).getTime()) return t.___;
+            this.del(k);
         }
         pop(k) {
             let v = this.get(k);
-            v != null && this.del(k);
+            if (v != null) this.del(k);
             return v;
         }
         set(k, v, t) {
@@ -1006,12 +1008,14 @@
             var key = 'bank_link_' + [docname, company, bank_id].join('-');
             if (this.cache().has(key)) {
                 let data = this.cache().pop(key);
-                success(
-                    data.ref_id,
-                    data.auth_id,
-                    data.auth_expiry,
-                    data.auth_link
-                );
+                this._log('Bank auth', data);
+                if (this.$isDataObj(data))
+                    success(
+                        data.ref_id,
+                        data.auth_id,
+                        data.auth_expiry,
+                        data.auth_link
+                    );
                 return this;
             }
             
@@ -1036,6 +1040,7 @@
                     ret.ref_id = ref_id;
                     ret.auth_expiry = cint(ret.auth_expiry);
                     this.cache().set(key, ret, 3 * 60 * 60);
+                    this._log('Bank auth received', ret);
                     success(
                         ret.ref_id,
                         ret.auth_id,
