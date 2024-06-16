@@ -71,11 +71,12 @@ def get_banks(company, country=None, pay_option=0, raw=False):
 
 # [G JS]
 @frappe.whitelist(methods=["POST"])
-def get_bank_auth(name, ref_id, company, bank_id, transaction_days=0):
+def get_bank_auth(name, ref_id, company, bank, bank_id, transaction_days=0):
     if (
         not name or not isinstance(name, str) or
         not ref_id or not isinstance(ref_id, str) or
         not company or not isinstance(company, str) or
+        not bank or not isinstance(bank, str) or
         not bank_id or not isinstance(bank_id, str)
     ):
         _store_error({
@@ -83,6 +84,7 @@ def get_bank_auth(name, ref_id, company, bank_id, transaction_days=0):
             "name": name,
             "ref_id": ref_id,
             "company": company,
+            "bank": bank,
             "bank_id": bank_id,
             "transaction_days": transaction_days
         })
@@ -94,7 +96,7 @@ def get_bank_auth(name, ref_id, company, bank_id, transaction_days=0):
     if isinstance(client, dict):
         return client
     
-    return client.get_bank_link(name, ref_id, bank_id, transaction_days)
+    return client.get_bank_link(name, ref_id, bank, bank_id, transaction_days)
 
 
 # [G JS]

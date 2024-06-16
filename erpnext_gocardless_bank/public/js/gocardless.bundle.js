@@ -1001,25 +1001,11 @@
             })
             .emit('ready');
         }
-        get_auth(docname, company, bank_id, transaction_days, success, error) {
+        get_auth(docname, company, bank, bank_id, transaction_days, success, error) {
             success = this.$fn(success);
             if (!success) return this;
             
-            var key = 'bank_link_' + [docname, company, bank_id].join('-');
-            if (this.cache().has(key)) {
-                let data = this.cache().pop(key);
-                this._log('Bank auth', data);
-                if (this.$isDataObj(data))
-                    success(
-                        data.ref_id,
-                        data.auth_id,
-                        data.auth_expiry,
-                        data.auth_link
-                    );
-                return this;
-            }
-            
-            var ref_id = '_' + frappe.utils.get_random(32);
+            var ref_id = '_' + frappe.utils.get_random(16);
             transaction_days = cint(transaction_days);
             if (transaction_days < 1) transaction_days = this._transaction_days;
             error = this.$fn(error);
@@ -1030,6 +1016,7 @@
                     name: docname,
                     ref_id: ref_id,
                     company: company,
+                    bank: bank,
                     bank_id: bank_id,
                     transaction_days: transaction_days
                 },
@@ -1037,16 +1024,11 @@
                     if (!this.$isDataObj(ret))
                         return this.error(__('Bank link data received is invalid.'));
                     
-                    ret.ref_id = ref_id;
-                    ret.auth_expiry = cint(ret.auth_expiry);
-                    this.cache().set(key, ret, 3 * 60 * 60);
+                    ret.auth_expiry_int = cint(ret.auth_expiry);
+                    ret.auth_expiry = moment().add(ret.auth_expiry_int, 'days').format(frappe.defaultDateFormat);
+                    this.cache().set(key, 'gocardless_' + ref_id, 10 * 60 * 60);
                     this._log('Bank auth received', ret);
-                    success(
-                        ret.ref_id,
-                        ret.auth_id,
-                        ret.auth_expiry,
-                        ret.auth_link
-                    );
+                    success(ret.auth_link);
                 },
                 function(e) {
                     error ? error(e) : this.error(e.self ? e.message : __('Unable to get Gocardless bank link data.'));
@@ -1061,7 +1043,7 @@
             delete frappe.route_options.ref;
             if (!this.$isStrVal(ref)) return {invalid_ref: 1, data: ref};
             let key = 'gocardless_' + ref;
-            if (!this.cache().has(key)) return {not_found: 1, data: ref};
+            if (!this.cache().has(key)) return {not_found: 1, data: key};
             var val = this.cache().pop(key);
             if (
                 !this.$isBaseObj(val) || !this.$isStrVal(val.name)

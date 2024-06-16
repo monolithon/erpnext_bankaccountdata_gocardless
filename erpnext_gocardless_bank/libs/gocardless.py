@@ -196,7 +196,7 @@ class Gocardless:
     
     
     # [Bank]
-    def get_bank_link(self, docname: str, ref_id: str, bank_id: str, transaction_days: int=None):
+    def get_bank_link(self, docname: str, ref_id: str, bank: str, bank_id: str, transaction_days: int=None):
         agreement = self.get_bank_agreement(bank_id, transaction_days)
         if not isinstance(agreement, dict) or "error" in agreement:
             return agreement
@@ -228,6 +228,9 @@ class Gocardless:
             self._log_error(err)
             return {"error": err}
         
+        data["name"] = docname
+        data["bank"] = bank
+        data["bank_id"] = bank_id
         data["auth_id"] = data.pop("id")
         data["auth_link"] = data.pop("link")
         data["auth_expiry"] = agreement["access_valid_for_days"]

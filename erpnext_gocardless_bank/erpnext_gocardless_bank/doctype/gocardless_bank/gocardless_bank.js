@@ -133,17 +133,21 @@ frappe.ui.form.on('Gocardless Bank', {
         if (ret.disabled) return;
         frm._bank.inits.link = 1;
         if (ret.no_route) return;
-        if (ret.invalid_ref)
+        if (ret.invalid_ref) {
+            frappe.gc()._error('Invalid auth ref.', ret.data);
             return frappe.gc().error(__('Authorization reference ID is invalid.'));
-        if (ret.not_found)
+        }
+        if (ret.not_found) {
+            frappe.gc()._error('No auth ref.', ret.data);
             return frappe.gc().error(__('Authorization data is missing.'));
+        }
         if (
             ret.invalid_data
             || ret.data.name !== cstr(frm.docname)
             || ret.data.bank !== cstr(frm.doc.bank)
             || ret.data.bank_id !== cstr(frm.doc.bank_id)
         ) {
-            frappe.gc()._error('Invalid authorization data.', ret.data);
+            frappe.gc()._error('Invalid auth data.', ret.data);
             return frappe.gc().error(__('Authorization data is invalid.'));
         }
         frm._bank.inits.bar && frm.events.setup_toolbar(frm, 1);
@@ -251,29 +255,19 @@ frappe.ui.form.on('Gocardless Bank', {
         frappe.gc()._log('Setup auth button');
         frm._bank.inits.bar = 1;
         frm.add_custom_button(label, function() {
-            var name = cstr(frm.docname),
-            company = cstr(frm.doc.company),
-            bank = cstr(frm.doc.bank),
-            bank_id = cstr(frm.doc.bank_id),
-            transaction_days = cint(frm.doc.transaction_days);
-            
             frappe.gc().get_auth(
-                name, company, bank_id, transaction_days,
-                function(ref_id, auth_id, auth_expiry, auth_link) {
-                    auth_expiry = moment().add(cint(auth_expiry), 'days').format(frappe.defaultDateFormat);
-                    this.cache().set('gocardless_' + ref_id, {
-                        name: name,
-                        bank: bank,
-                        bank_id: bank_id,
-                        auth_id: auth_id,
-                        auth_expiry: auth_expiry
-                    });
-                    this.info_(__('Redirecting to "{0}" authorization page.', [bank]));
+                cstr(frm.docname),
+                cstr(frm.doc.company),
+                cstr(frm.doc.bank),
+                cstr(frm.doc.bank_id),
+                cint(frm.doc.transaction_days),
+                function(auth_link) {
+                    this.info_(__('Redirecting to "{0}" authorization page.', [cstr(frm.doc.bank)]));
                     this.$timeout(function() { window.location.href = auth_link; }, 2000);
                 },
                 function(e) {
-                    this._error('Failed to connect to bank.', company, bank, bank_id, transaction_days, e.message);
-                    this.error(e.self ? e.message : __('Failed to connect to {0}.', [bank]))
+                    this._error('Failed to connect to bank.', frm.doc.company, frm.doc.bank, frm.doc.bank_id, cint(frm.doc.transaction_days), e.message);
+                    this.error(e.self ? e.message : __('Failed to connect to {0}.', [cstr(frm.doc.bank)]))
                 }
             );
         });
