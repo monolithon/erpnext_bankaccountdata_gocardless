@@ -108,7 +108,7 @@
                 : (l < 4 ? fn.call(o, a[0], a[1], a[2]) : fn.apply(o, a))));
         },
         $try(fn, a, o) { try { return this.$call(fn, a, o); } catch(e) { console.error(e.message, e.stack); } },
-        $xtry(fn, a, o) { return this.fn(function() { return this.try(fn, a, o); }); },
+        $xtry(fn, a, o) { return this.$fn(function() { return this.try(fn, a, o); }); },
         $timeout(fn, tm, a, o) {
             return tm != null ? setTimeout(this.$afn(fn, a, o), tm) : ((fn && clearTimeout(fn)) || this);
         },
@@ -1026,7 +1026,7 @@
                     
                     ret.auth_expiry_int = cint(ret.auth_expiry);
                     ret.auth_expiry = moment().add(ret.auth_expiry_int, 'days').format(frappe.defaultDateFormat);
-                    this.cache().set(key, 'gocardless_' + ref_id, 10 * 60 * 60);
+                    this.cache().set('gocardless_' + ref_id, ret, 10 * 60 * 60);
                     this._log('Bank auth received', ret);
                     success(ret.auth_link);
                 },

@@ -50,7 +50,7 @@ def log_error(text):
 
 
 # [G Bank, G Settings, Bank, System]
-def error(text: str, title: str | None=None):
+def error(text: str, title: str=None):
     frappe.throw(text, title=title or __module__)
 
 

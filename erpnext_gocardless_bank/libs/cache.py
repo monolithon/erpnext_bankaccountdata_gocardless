@@ -13,7 +13,7 @@ def get_cache(dt: str, key: str, expires: bool=False):
 
 
 # [Bank, Bank Transaction, Currency]
-def set_cache(dt: str, key: str, data, expiry: int | None=None):
+def set_cache(dt: str, key: str, data, expiry: int=None):
     frappe.cache().set_value(f"{dt}-{key}", data, expires_in_sec=expiry)
 
 
@@ -35,7 +35,7 @@ def get_cached_doc(dt: str, name: str=None, for_update: bool=False):
 
 
 # [G Bank, G Setting, Bank, Bank Account, Bank Account Type, Bank Transaction, Currency, Internal]
-def clear_doc_cache(dt: str, name: str | None=None):
+def clear_doc_cache(dt: str, name: str=None):
     frappe.cache().delete_keys(dt)
     frappe.clear_cache(doctype=dt)
     if name is None:
