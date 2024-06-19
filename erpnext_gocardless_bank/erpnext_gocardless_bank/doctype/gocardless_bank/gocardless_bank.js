@@ -31,7 +31,6 @@ frappe.ui.form.on('Gocardless Bank', {
         if (frm.doc.__needs_refresh) return frm.reload_doc();
         !frm._bank.inits.errors && frm.events.setup_errors(frm);
         !frm.is_new() && frm.events.check_status(frm);
-        delete frm._bank.inits.reload;
     },
     company: function(frm) {
         let val = cstr(frm.doc.company);
@@ -92,6 +91,8 @@ frappe.ui.form.on('Gocardless Bank', {
             submitted: frm._bank.is_submitted,
             cancelled: frm._bank.is_cancelled
         });
+        let reload = frm._bank.inits.reload;
+        frm._bank.inits.reload = 0;
         if (frm._bank.is_cancelled) return;
         let setup = !frm._bank.inits.setup;
         setup && frm.events.load_banks(frm, 1);
@@ -122,14 +123,18 @@ frappe.ui.form.on('Gocardless Bank', {
             }
             frm._bank.inits.bar && frm.events.setup_toolbar(frm, 1);
             !frm._bank.inits.sync && frm.events.setup_sync_data(frm);
-            (frm._bank.inits.reload || setup) && frm.events.load_accounts(frm);
+            (reload || setup) && frm.events.load_accounts(frm);
         }
     },
     check_link: function(frm) {
         let ret = frappe.gc().check_auth();
-        if (ret.not_ready) return frappe.gc().$timeout(function() {
-            frm.events.check_link(frm);
-        }, 300);
+        if (ret.not_ready) {
+            if (cint(frm._bank.inits.not_ready) > 5) return;
+            return frappe.gc().$timeout(function() {
+                frm._bank.inits.not_ready = cint(frm._bank.inits.not_ready) + 1;
+                frm.events.check_link(frm);
+            }, 300);
+        }
         if (ret.disabled) return;
         frm._bank.inits.link = 1;
         if (ret.no_route) return;
@@ -161,16 +166,14 @@ frappe.ui.form.on('Gocardless Bank', {
                 auth_expiry: ret.auth_expiry,
             },
             function(ret) {
-                if (!ret) this.error(__('Unable to store bank authorization.'));
-                else this.success_(__('Bank has been authorized successfully.'));
+                if (!ret) return this.error(__('Unable to store bank authorization.'));
+                this.success_(__('Bank has been authorized successfully.'));
                 frm._bank.inits.reload = 1;
                 frm.reload_doc();
             },
             function(e) {
                 this._error('Failed to store bank authorization.', ret, e.message);
                 this.error(e.self ? e.message : __('Failed to store bank authorization.'));
-                frm._bank.inits.reload = 1;
-                frm.reload_doc();
             }
         );
     },
@@ -405,7 +408,7 @@ frappe.gc_accounts = {
         return 1;
     },
     wait() {
-        if (!this._wait_tm) this._wait_tm = frappe.gc().$timeout(function() {
+        if (!this.ready && !this._wait_tm) this._wait_tm = frappe.gc().$timeout(function() {
             this.reset();
             this._frm._bank.inits.reload = 1;
             this._frm.reload_doc();
