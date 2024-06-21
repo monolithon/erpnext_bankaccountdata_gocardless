@@ -35,7 +35,8 @@
    "label": "Account ID",
    "bold": 1,
    "read_only": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "main_column",
@@ -47,7 +48,8 @@
    "label": "Currency",
    "bold": 1,
    "read_only": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "status",
@@ -57,38 +59,44 @@
    "default": "",
    "bold": 1,
    "read_only": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "account_type",
    "fieldtype": "Data",
    "label": "Account Type",
-   "hidden": 1
+   "hidden": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "account_no",
    "fieldtype": "Data",
    "label": "Account No.",
-   "hidden": 1
+   "hidden": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "iban",
    "fieldtype": "Data",
    "label": "IBAN",
-   "hidden": 1
+   "hidden": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "balances",
    "fieldtype": "Long Text",
    "label": "Balances",
-   "hidden": 1
+   "hidden": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "last_sync",
    "fieldtype": "Datetime",
    "label": "Last Sync",
    "default": "",
-   "hidden": 1
+   "hidden": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "bank_account_ref",
@@ -99,7 +107,8 @@
    "hidden": 1,
    "print_hide": 1,
    "report_hide": 1,
-   "ignore_user_permissions": 1
+   "ignore_user_permissions": 1,
+   "allow_on_submit": 1
   },
   {
    "fieldname": "bank_account_type_ref",
@@ -110,11 +119,12 @@
    "hidden": 1,
    "print_hide": 1,
    "report_hide": 1,
-   "ignore_user_permissions": 1
+   "ignore_user_permissions": 1,
+   "allow_on_submit": 1
   }
  ],
  "istable": 1,
- "modified": "2024-05-31 04:04:04",
+ "modified": "2024-06-21 04:04:04",
  "modified_by": "Administrator",
  "module": "ERPNext Gocardless Bank",
  "name": "Gocardless Bank Account",

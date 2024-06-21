@@ -86,11 +86,6 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     check_status: function(frm) {
         !frm._bank.inits.doc && frm.events.check_doc(frm);
-        frappe.gc()._log('Form doc status', {
-            draft: frm._bank.is_draft,
-            submitted: frm._bank.is_submitted,
-            cancelled: frm._bank.is_cancelled
-        });
         let reload = frm._bank.inits.reload;
         frm._bank.inits.reload = 0;
         if (frm._bank.is_cancelled) return;
@@ -100,7 +95,6 @@ frappe.ui.form.on('Gocardless Bank', {
         frm._bank.inits.auth = frappe.gc().$isStrVal(frm.doc.auth_id)
             && frappe.gc().$isStrVal(frm.doc.auth_expiry)
             && cstr(frm.doc.auth_status) !== 'Unlinked' ? 1 : 0;
-        frappe.gc()._log('Form auth status', frm._bank.inits.auth);
         if (!frm._bank.inits.auth) {
             frm._bank.inits.sync && frm.events.setup_sync_data(frm, 1);
             !frm._bank.inits.bar && frm.events.setup_toolbar(frm);
@@ -249,13 +243,11 @@ frappe.ui.form.on('Gocardless Bank', {
         let label = __('Authorize');
         if (frm.custom_buttons[label]) {
             if (!clear) return;
-            frappe.gc()._log('Remove auth button');
             frm.custom_buttons[label].remove();
             delete frm.custom_buttons[label];
             delete frm._bank.inits.bar;
         }
         if (clear || frm._bank.inits.bar) return;
-        frappe.gc()._log('Setup auth button');
         frm._bank.inits.bar = 1;
         frm.add_custom_button(label, function() {
             frappe.gc().get_auth(
@@ -462,7 +454,6 @@ frappe.gc_accounts = {
         this._switch('loading');
     },
     _render() {
-        frappe.gc()._log('Accounts: rendering bank account table');
         if (!this._$table) this._build();
         else this._$body.empty();
         if (!frappe.gc().$isArr(this._frm.doc.bank_accounts)) this._length = 0;
@@ -470,7 +461,7 @@ frappe.gc_accounts = {
         if (!this._length) {
             this._$body.append('\
 <tr>\
-    <td scope="row" colspan="4" class="text-center text-muted">\
+    <td scope="row" colspan="3" class="text-center text-muted">\
         ' + __('No bank account was received.') + '\
     </td>\
 </tr>\
@@ -483,7 +474,6 @@ frappe.gc_accounts = {
     ' + [
         this._render_account(r),
         this._render_balance(r),
-        this._render_status(r),
         this._render_action(r)
     ].join('\n') + '\
 </tr>\
@@ -502,6 +492,11 @@ frappe.gc_accounts = {
         this._view = key;
     },
     _build() {
+        if (!frappe.gc().$hasElem('fontawesome'))
+            frappe.gc().$loadCss(
+                '/assets/frappe/css/fonts/fontawesome/font-awesome.min.css',
+                {id: 'fontawesome'}
+            );
         if (!frappe.gc().$hasElem('gocardless_css'))
             frappe.gc().$loadCss(
                 '/assets/erpnext_gocardless_bank/css/gocardless.bundle.css',
@@ -514,7 +509,6 @@ frappe.gc_accounts = {
         <tr>\
             <th scope="col">' + __('Account') + '</th>\
             <th>' + __('Balance') + '</th>\
-            <th>' + __('Status') + '</th>\
             <th>' + __('Actions') + '</th>\
         </tr>\
     </thead>\
@@ -539,67 +533,64 @@ frappe.gc_accounts = {
         this._toggle_btns('link', this._enabled);
     },
     _render_account(row) {
-        let html = '<strong>' + row.account + '</strong>';
+        let html = '<strong>' + row.account + '</strong>' + this._render_badge(row);
         html += '<br/><small class="text-muted">' + __('ID') + ': ' + row.account_id + '</small>';
         if (frappe.gc().$isStrVal(row.last_sync)) {
-            html += '<br/><small class="text-muted">' + __('Last Update') + ': '
+            html += ' - <small class="text-muted">' + __('Last Update') + ': '
                 + moment(row.last_sync, frappe.defaultDateFormat).fromNow() + '</small>';
         }
         return '<td scope="row">' + html + '</td>';
     },
+    _render_badge(row) {
+        let color = 'secondary';
+        if (row.status === 'Ready' || row.status === 'Enabled') color = 'success';
+        else if (row.status === 'Expired' || row.status === 'Error' || row.status === 'Deleted') color = 'danger';
+        else if (row.status === 'Processing') color = 'info';
+        else if (row.status === 'Suspended' || row.status === 'Blocked') color = 'warning';
+        return ' <span class="badge badge-pill badge-' + color + '">' + __(row.status) + '</span>';
+    },
     _render_balance(row) {
-        let data = {};
+        let data;
         if (row.balances) {
             let list = frappe.gc().$parseJson(row.balances);
             if (frappe.gc().$isArrVal(list))
                 for (let i = 0, l = list.length, v; i < l; i++) {
                     v = list[i];
-                    if (cint(v.reqd)) data[v.type] = format_currency(v.amount, v.currency);
+                    if (this._balance_keys.includes(v.type)) {
+                        data = format_currency(v.amount, v.currency);
+                        break;
+                    }
                 }
         }
-        return '\
-        <td class="text-center">\
-            ' + Object.values(frappe.gc().$map({
-                opening: this._balance_labels.opening,
-                closing: this._balance_labels.closing,
-            }, function(v, k) {
-                return '<small>' + v + ': ' + (data[k] != null ? data[k] : 'N/A') + '</small>';
-            })).join('<br />') + '\
-        </td>\
-        ';
-    },
-    _render_status(row) {
-        let color = 'text-muted';
-        if (row.status === 'Ready' || row.status === 'Enabled') color = 'text-success';
-        else if (row.status === 'Expired' || row.status === 'Error' || row.status === 'Deleted') color = 'text-danger';
-        else if (row.status === 'Processing') color = 'text-info';
-        else if (row.status === 'Suspended' || row.status === 'Blocked') color = 'text-warning';
-        return '<td><span class="' + color + '">' + __(row.status) + '</span></td>';
+        return '<td>' + (data || 'N/A') + '</td>';
     },
     _render_action(row) {
-        let html = '<button type="button" class="btn btn-{color} {action}"{attr}>{label}</button>',
+        let html = '<button type="button" class="btn btn-sm btn-{color} {action}" data-toggle="tooltip" data-placement="top" title="{label}"{attr}>{icon}</button>',
         actions = [],
         exists = frappe.gc().$isStrVal(row.bank_account_ref),
         disabled = row.status !== 'Ready' && row.status !== 'Enabled';
         actions.push(html
             .replace('{action}', 'gc-balance')
-            .replace('{color}', 'info')
+            .replace('{color}', 'default')
             .replace('{attr}', '')
-            .replace('{label}', __('Balance'))
+            .replace('{label}', __('Account Balance'))
+            .replace('{icon}', '<i class="fa fa-fw fa-dollar"></i>')
         );
         exists && actions.push(html
             .replace('{action}', 'gc-link')
-            .replace('{color}', 'default')
+            .replace('{color}', 'info')
             .replace('{attr}', '')
-            .replace('{label}', __('Edit'))
+            .replace('{label}', __('Edit Account'))
+            .replace('{icon}', '<i class="fa fa-fw fa-pen"></i>')
         );
         actions.push(html
             .replace('{action}', 'gc-action')
             .replace('{color}', exists ? 'warning' : 'success')
             .replace('{attr}', disabled ? ' disabled' : '')
-            .replace('{label}', exists ? __('Sync') : __('Add'))
+            .replace('{label}', exists ? __('Sync Account') : __('Add Account'))
+            .replace('{icon}', '<i class="fa fa-fw fa-' + (exists ? 'refresh' : 'plus') + '"></i>')
         );
-        return '<td><div class="btn-group btn-group-sm">' + actions.join('') + '</div></td>';
+        return '<td><div class="btn-group btn-group-sm" role="group" aria-label="">' + actions.join('') + '</div></td>';
     },
     _on_balance(e) {
         if (!this._balance_dialog) {
@@ -610,6 +601,16 @@ frappe.gc_accounts = {
             this._balance_dialog.modal_body.append('\
 <div class="table-responsive m-0 p-0">\
     <table class="table table-sm table-borderless gc-table">\
+        <thead class="thead-dark">\
+            <tr>\
+                <th scope="col">' + __('Type') + '</th>\
+                <th>' + __('Amount') + '</th>\
+                <th>' + __('Date') + '</th>\
+                <th>' + __('Inc. Credit Limit') + '</th>\
+                <th>' + __('Last Change') + '</th>\
+                <th>' + __('Last Transaction ID') + '</th>\
+            </tr>\
+        </thead>\
         <tbody>\
         </tbody>\
     </table>\
@@ -633,17 +634,23 @@ frappe.gc_accounts = {
                 let list = frappe.gc().$parseJson(row.balances);
                 if (frappe.gc().$isArrVal(list))
                     for (let i = 0, l = list.length, v; i < l; i++) {
-                        v = list[i];
-                        data[v.type] = format_currency(v.amount, v.currency);
+                        v = Object.assign({}, list[i]);
+                        v.amount = format_currency(v.amount, v.currency);
+                        data[v.type] = v;
                     }
             }
         }
         this._balance_dialog.modal_body.find('tbody').first().append('\
             ' + Object.values(frappe.gc().$map(this._balance_labels, function(v, k) {
+                    k = data[k];
                     return '\
             <tr>\
                 <td scope="row">' + v + '</td>\
-                <td class="text-center">' + (data[k] != null ? data[k] : 'N/A') + '</td>\
+                <td class="text-center">' + ((k && k.amount) || 'N/A') + '</td>\
+                <td class="text-center">' + ((k && k.date) || 'N/A') + '</td>\
+                <td class="text-center"><i class="fa fa-fw fa-' + (k && k.inc_credit_limit ? 'check' : 'times') + '"></i></td>\
+                <td class="text-center">' + ((k && k.last_change) || 'N/A') + '</td>\
+                <td class="text-center">' + ((k && k.last_transaction_id) || 'N/A') + '</td>\
             </tr>\
                     ';
             })).join('\n') + '\
@@ -752,6 +759,13 @@ frappe.gc_accounts = {
                 }
             }
     },
+    _balance_keys: [
+        'day_balance',
+        'closing',
+        'closing_booked',
+        'temp_balance',
+        'temp_booked',
+    ],
     _balance_labels: {
         closing: __('Closing'),
         closing_booked: __('Closing Booked'),

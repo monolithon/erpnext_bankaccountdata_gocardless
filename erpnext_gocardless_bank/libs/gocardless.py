@@ -352,26 +352,15 @@ class Gocardless:
                 self._store_info({"info": "Balance type not recorded.", "data": v})
             
             balances.append({
+                "date": v.get("referenceDate", ""),
                 "type": balance_type,
                 "amount": v["balanceAmount"]["amount"],
                 "currency": v["balanceAmount"]["currency"],
-                "inc_limit": v.get("creditLimitIncluded", ""),
+                "inc_credit_limit": 1 if v.get("creditLimitIncluded", "") else 0,
                 "last_change": v.get("lastChangeDateTime", ""),
-                "date": v.get("referenceDate", ""),
-                "reqd": 1 if balance_type in Api.reqd_account_balance_types else 0
+                "last_transaction_id": v.get("lastCommittedTransaction", "")
             })
         
-        types_vals = list(Api.account_balance_types.values())
-        def data_sorter(val):
-            nonlocal types_vals
-            
-            if val["type"] not in types_vals:
-                idx = 100
-            else:
-                idx = types_vals.index(val["type"])
-            return idx
-        
-        balances = sorted(balances, key=data_sorter)
         return balances
     
     

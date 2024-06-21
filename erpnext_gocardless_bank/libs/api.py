@@ -79,7 +79,6 @@ class Api:
         "nonInvoiced": "uninvoiced",
         "previouslyClosedBooked": "prev_closing_booked"
     }
-    reqd_account_balance_types = ["closing", "opening"]
     
     
     @staticmethod
