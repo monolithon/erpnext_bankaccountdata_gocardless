@@ -17,12 +17,12 @@ frappe.ui.form.on('Bank Transaction', {
         
         function gc_init() {
             if (typeof frappe.gc !== 'function')
-                return setTimeout(gc_init, 500);
+                return setTimeout(gc_init, 300);
             
-            if (
-                frappe.gc().is_enabled
-                && frappe.gc().$isStrVal(frm.doc.gocardless_transaction_info)
-            ) frm.toggle_display('gocardless_transaction_info', true);
+            frappe.gc().on('ready change', function() {
+                if (this.$isStrVal(frm.doc.gocardless_transaction_info))
+                    frm.toggle_display('gocardless_transaction_info', !!this.is_enabled);
+            });
         }
         gc_init();
     },

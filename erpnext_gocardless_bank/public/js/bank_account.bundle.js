@@ -14,7 +14,7 @@ frappe.ui.form.on('Bank Account', {
     onload: function(frm) {
         function gc_init() {
             if (typeof frappe.gc !== 'function')
-                return setTimeout(gc_init, 500);
+                return setTimeout(gc_init, 300);
             
             frm._gc = {};
             if (frm._gc_refresh) frm.events.gc_check_status(frm);
@@ -37,7 +37,10 @@ frappe.ui.form.on('Bank Account', {
     gc_setup_form: function(frm) {
         frm._gc.setup = 1;
         frappe.gc()
-            .on('page_change', function() { frm && delete frm._gc; })
+            .on('page_change', function() {
+                this.off('bank_error');
+                frm && delete frm._gc;
+            })
             .on('ready change', function() {
                 if (frm._gc.enabled == null) frm._gc.enabled = this.is_enabled;
                 else if (frm._gc.enabled == this.is_enabled) return;

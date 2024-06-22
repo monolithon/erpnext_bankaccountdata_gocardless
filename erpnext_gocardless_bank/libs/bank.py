@@ -61,7 +61,7 @@ def get_banks(company, country=None, pay_option=0, raw=False):
     if data and isinstance(data, list):
         from .cache import set_cache
         
-        set_cache(dt, key, data, 2 * 24 * 60 * 60)
+        set_cache(dt, key, data, 7 * 24 * 60 * 60)
     
     if raw and not isinstance(data, list):
         return None
@@ -160,12 +160,13 @@ def sync_bank(name, bank, company, auth_id):
                 "name": name,
                 "bank": bank
             })
-        else:
-            _emit_error({
-                "name": name,
-                "bank": bank,
-                "error": _("Unable to sync bank accounts of bank \"{0}\".").format(name)
-            })
+    
+    if not status:
+        _emit_error({
+            "name": name,
+            "bank": bank,
+            "error": _("Unable to sync bank accounts of bank \"{0}\".").format(name)
+        })
     
     return status
 

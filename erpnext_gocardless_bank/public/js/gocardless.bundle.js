@@ -178,6 +178,7 @@
             this._pfx = '[' + this._key.toUpperCase() + ']';
             this._ns = ns + (!ns.endsWith('.') ? '.' : '');
             this._prod = 0;
+            this._exit = 0;
             this._events = {
                 list: {},
                 real: {},
@@ -225,8 +226,12 @@
             o = this.$extend(1, {
                 url: u, method: 'GET', cache: false, 'async': true, crossDomain: true,
                 headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-                success: this.$fn(s),
+                success: this.$fn(function(r) {
+                    if (this._exit) return;
+                    (s = this.$fn(s)) && s(r);
+                }),
                 error: this.$fn(function(r, t) {
+                    if (this._exit) return;
                     r = this.$isStrVal(r) ? __(r) : (this.$isStrVal(t) ? __(t)
                         : __('The ajax request sent raised an error.'));
                     (f = this.$fn(f)) ? f({message: r}) : this._error(r);
@@ -248,6 +253,7 @@
             let d = {
                 method: m.includes('.') ? m : this.get_method(m),
                 callback: this.$fn(function(r) {
+                    if (this._exit) return;
                     r = (this.$isBaseObj(r) && r.message) || r;
                     if (!this.$isBaseObj(r) || !r.error) return s && s(r);
                     if (!this.$isBaseObj(r)) r = {};
@@ -259,6 +265,7 @@
                     f ? f(r) : this._error(m);
                 }),
                 error: this.$fn(function(r, t) {
+                    if (this._exit) return;
                     r = this.$isStrVal(r) ? __(r) : (this.$isStrVal(t) ? __(t) : __('The request sent raised an error.'));
                     f ? f({message: r}) : this._error(r);
                 })
@@ -303,7 +310,7 @@
             for (let es = this._events, i = 0, l = ev.length, e; i < l; i++) {
                 e = (r ? this._real : '') + ev[i];
                 e === es.once[0] && this._is_ready && rd.push(es.once[0]);
-                es.once.includes(e) && (o = 1);
+                !s && es.once.includes(e) && (o = 1);
                 !es.list[e] && (es.list[e] = []) && (!r || frappe.realtime.on(e, (es.real[e] = this._rfn(e))));
                 es.list[e].push({f: fn, o, s});
             }
@@ -311,7 +318,8 @@
         }
         _rfn(e) {
             return this.$fn(function(r) {
-                (r = (this.$isBaseObj(r) && r.message) || r) && this._emit(e, r != null ? [r] : r, Promise.wait(300));
+                !this._exit && (r = (this.$isBaseObj(r) && r.message) || r) && this._emit(e, r != null ? [r] : r, Promise.wait(300));
+                return true;
             });
         }
         _off(e, fn) {
@@ -586,8 +594,12 @@
                 fn: this.$fn(function() {
                     if (this._win.c || !LUR.get(this)) return;
                     this._win.c++;
+                    this._exit++;
                     this.emit('page_change page_clean');
-                    this.$timeout(function() { this._win.c--; }, 2000);
+                    this.$timeout(function() {
+                        this._win.c--;
+                        this._exit--;
+                    }, 2000);
                 }),
             };
             addEventListener('beforeunload', this._win.e.unload);
@@ -993,7 +1005,8 @@
         _init(opts) {
             this._is_ready = 1;
             opts && this.$xdef(opts);
-            this.xreal('status_changed', function(ret) {
+            this.xon('page_change', function() { this.off('change on_alert'); })
+            .xreal('status_changed', function(ret) {
                 if (!this.$isBaseObj(ret)) return this._error('Invalid status change event.', ret);
                 let old = this._is_enabled;
                 this.$xdef(ret);

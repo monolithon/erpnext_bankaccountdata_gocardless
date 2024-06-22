@@ -12,6 +12,9 @@ frappe.ui.form.on('Gocardless Bank', {
             .on('ready change', function() { this.setup_form(frm); })
             .on('on_alert', function(d, t) {
                 frm._bank.errs.includes(t) && (d.title = __(frm.doctype));
+            })
+            .on('page_change', function() {
+                this.off('reload_bank_accounts bank_error');
             });
         frm._bank = {
             errs: ['fatal', 'error'],
@@ -102,7 +105,6 @@ frappe.ui.form.on('Gocardless Bank', {
         } else {
             if (!frm._bank.inits.reload_accounts) {
                 frm._bank.inits.reload_accounts = 1;
-                frappe.gc_accounts.wait();
                 frappe.gc().real('reload_bank_accounts', function(ret) {
                     if (
                         !this.$isDataObj(ret) || (
@@ -110,7 +112,7 @@ frappe.ui.form.on('Gocardless Bank', {
                             && (!this.$isStrVal(ret.bank) || ret.bank !== cstr(frm.doc.bank))
                         )
                     ) return this._error('Accounts: invalid bank accounts reloading data received', ret);
-                    frappe.gc_accounts.reset();
+                    frappe.gc_accounts.wait();
                     frm._bank.inits.reload = 1;
                     frm.reload_doc();
                 });
@@ -183,7 +185,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 )
             ) return this._error('Invalid error data received', ret);
             this.error(ret.error);
-            frm._bank.is_submitted && frm._bank.inits.auth && frappe.gc_accounts.reset();
+            frm._bank.is_submitted && frm._bank.inits.auth && frappe.gc_accounts.wait();
             frm._bank.inits.reload = 1;
             frm.reload_doc();
         });
@@ -284,7 +286,7 @@ frappe.ui.form.on('Gocardless Bank', {
         frm.toggle_display('sync_html', val);
     },
     load_accounts: function(frm) {
-        if (frappe.gc_accounts.ready) return frappe.gc_accounts.check();
+        if (frappe.gc_accounts.ready) return frappe.gc_accounts.load();
         frappe.gc_accounts.init(frm);
         if (!frappe.gc_accounts.ready)
             frappe.gc()._error('Unable to get the accounts html field.');
@@ -384,36 +386,40 @@ frappe.gc_banks = {
 
 
 frappe.gc_accounts = {
-    _wait_time: 1 * 60 * 1000,
     init(frm) {
+        if (this.ready) return 1;
         let field = frm.get_field('bank_accounts_html');
-        if (!field || !field.$wrapper) return;
+        if (!field || !field.$wrapper) return 0;
         this.ready = 1;
         this._frm = frm;
         this._field = field;
         this._enabled = frappe.gc().is_enabled;
         this._destroy = frappe.gc().$fn(this.destroy, this);
         this._refresh = frappe.gc().$fn(this._refresh_btns, this);
-        frappe.gc().once('page_change', this._destroy);
-        frappe.gc().on('change', this._refresh);
-        this.check();
+        frappe.gc()
+            .on('page_change', this._destroy)
+            .on('change', this._refresh);
+        this.wait();
+        if (!frappe.gc().$isArrVal(this._frm.doc.bank_accounts))
+            this._wait_tm = frappe.gc().$timeout(function() {
+                this._wait_tm = null;
+                this._frm._bank.inits.reload = 1;
+                this._frm.reload_doc();
+            }, 60 * 1000, null, this);
         return 1;
     },
     wait() {
-        if (!this.ready && !this._wait_tm) this._wait_tm = frappe.gc().$timeout(function() {
-            this.reset();
-            this._frm._bank.inits.reload = 1;
-            this._frm.reload_doc();
-        }, this._wait_time, null, this);
+        if (!this.ready) return;
+        this._reset();
+        this._loading();
     },
-    check() {
-        if (this.ready) this._wait_tm ? this._loading() : this._render();
-    },
-    reset() {
-        this._wait_tm && frappe.gc().$timeout(this._wait_tm);
-        this._wait_tm = this._linked = null;
+    load() {
+        if (!this.ready) return;
+        this._reset();
+        this._render();
     },
     destroy() {
+        if (!this.ready) return;
         this._refresh && frappe.gc().off('change', this._refresh);
         if (this._$table) {
             this._$table.off('click', 'button.gc-balance', this._on_balance);
@@ -439,6 +445,10 @@ frappe.gc_accounts = {
         for (let k in this) {
             if (frappe.gc().$hasProp(k, this)) delete this[k];
         }
+    },
+    _reset() {
+        this._wait_tm && frappe.gc().$timeout(this._wait_tm);
+        this._wait_tm = this._linked = null;
     },
     _loading() {
         if (!this._$loading) this._$loading = $('\
@@ -547,7 +557,7 @@ frappe.gc_accounts = {
         else if (row.status === 'Expired' || row.status === 'Error' || row.status === 'Deleted') color = 'danger';
         else if (row.status === 'Processing') color = 'info';
         else if (row.status === 'Suspended' || row.status === 'Blocked') color = 'warning';
-        return ' <span class="badge badge-pill badge-' + color + '">' + __(row.status) + '</span>';
+        return '    <span class="badge badge-pill badge-' + color + '">' + __(row.status) + '</span>';
     },
     _render_balance(row) {
         let data;
@@ -581,7 +591,7 @@ frappe.gc_accounts = {
             .replace('{color}', 'info')
             .replace('{attr}', '')
             .replace('{label}', __('Edit Account'))
-            .replace('{icon}', '<i class="fa fa-fw fa-pen"></i>')
+            .replace('{icon}', '<i class="fa fa-fw fa-pencil"></i>')
         );
         actions.push(html
             .replace('{action}', 'gc-action')
@@ -760,11 +770,11 @@ frappe.gc_accounts = {
             }
     },
     _balance_keys: [
-        'day_balance',
         'closing',
         'closing_booked',
         'temp_balance',
         'temp_booked',
+        'day_balance',
     ],
     _balance_labels: {
         closing: __('Closing'),
