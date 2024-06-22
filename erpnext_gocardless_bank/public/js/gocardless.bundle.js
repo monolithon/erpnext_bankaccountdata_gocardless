@@ -226,9 +226,9 @@
             o = this.$extend(1, {
                 url: u, method: 'GET', cache: false, 'async': true, crossDomain: true,
                 headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-                success: this.$fn(function(r) {
+                success: this.$fn(function(r, t) {
                     if (this._exit) return;
-                    (s = this.$fn(s)) && s(r);
+                    (s = this.$fn(s)) && s(r, t);
                 }),
                 error: this.$fn(function(r, t) {
                     if (this._exit) return;
@@ -247,13 +247,13 @@
             return this;
         }
         get_method(v) { return this._ns + v; }
-        request(m, a, s, f) {
+        request(m, a, s, f, x) {
             s = this.$fn(s);
             f = this.$fn(f);
             let d = {
                 method: m.includes('.') ? m : this.get_method(m),
                 callback: this.$fn(function(r) {
-                    if (this._exit) return;
+                    if (!x && this._exit) return;
                     r = (this.$isBaseObj(r) && r.message) || r;
                     if (!this.$isBaseObj(r) || !r.error) return s && s(r);
                     if (!this.$isBaseObj(r)) r = {};
@@ -265,7 +265,7 @@
                     f ? f(r) : this._error(m);
                 }),
                 error: this.$fn(function(r, t) {
-                    if (this._exit) return;
+                    if (!x && this._exit) return;
                     r = this.$isStrVal(r) ? __(r) : (this.$isStrVal(t) ? __(t) : __('The request sent raised an error.'));
                     f ? f({message: r}) : this._error(r);
                 })
@@ -999,7 +999,7 @@
             });
             this.request(
                 'get_settings', null, this._init,
-                function() { this._error('Getting settings failed.'); }
+                function() { this._error('Getting settings failed.'); }, 1
             );
         }
         _init(opts) {
@@ -1066,7 +1066,7 @@
             return {data: val};
         }
         save_auth(data, success, error) {
-            return this.request('save_bank_auth', data, this.$fn(success), this.$fn(error));
+            return this.request('save_bank_auth', data, this.$fn(success), this.$fn(error), 1);
         }
     }
     
