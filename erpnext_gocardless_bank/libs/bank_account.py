@@ -163,13 +163,6 @@ def get_bank_account_data(account):
     if not account or not isinstance(account, str):
         return {"error": _("Arguments required to get bank account data are invalid.")}
     
-    from .system import is_enabled
-    
-    if not is_enabled():
-        from .system import app_disabled_message
-        
-        return {"error": app_disabled_message()}
-    
     pdt = "Gocardless Bank"
     pdoc = frappe.qb.DocType(pdt)
     doc = frappe.qb.DocType(f"{pdt} Account")
@@ -279,11 +272,11 @@ def get_client_bank_accounts(company, bank, auth_id):
 def prepare_bank_accounts(accounts, bank, company):
     from .system import settings
     from .company import get_company_currency
-    from .currency import get_currencies_status
+    from .currency import get_currencies_with_status
     
     doc = settings()
-    currency = get_company_currency(company)
-    currencies = get_currencies_status()
+    company_currency = get_company_currency(company)
+    currencies = get_currencies_with_status()
     skip = "Ignore"
     exist = []
     idx = 1
@@ -294,9 +287,9 @@ def prepare_bank_accounts(accounts, bank, company):
         if "name" not in v:
             v["name"] = f"{bank} Account"
         if "currency" not in v:
-            if not currency or doc.bank_account_without_currency == skip:
+            if doc.bank_account_without_currency == skip or not company_currency:
                 continue
-            v["currency"] = currency
+            v["currency"] = company_currency
         if v["currency"] not in currencies:
             if doc.bank_account_currency_doesnt_exist == skip:
                 continue

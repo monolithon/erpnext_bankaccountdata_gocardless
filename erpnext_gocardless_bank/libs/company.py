@@ -7,17 +7,23 @@
 import frappe
 
 
-# [G Bank, G Bank Form, Bank]
+# [G Bank Form]
 @frappe.whitelist(methods=["POST"])
 def get_company_country(company):
     if not company or not isinstance(company, str):
         return 0
     
+    data = get_company_country_name(company)
+    return data if data else 0
+
+
+# [G Bank, Bank]
+def get_company_country_name(company: str):
     from .cache import get_cached_value
     
     data = get_cached_value("Company", company, "country")
     if not data or not isinstance(data, str):
-        return 0
+        return None
     
     return data
 

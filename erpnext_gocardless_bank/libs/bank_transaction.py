@@ -81,15 +81,18 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     if get_cache(_SYNC_KEY_, data["account"], True):
         return {"success": 1}
     
+    from .datetime import today_date
+    
+    today = today_date()
+    if not check_sync_data(doc, data, today):
+        return {"info": _("Bank account \"{0}\" has exceeded the allowed sync limit for today.").format(data["account"])}
+    
     from .system import get_client
     
     client = get_client(doc.company, settings)
     if isinstance(client, dict):
         return client
     
-    from .datetime import today_date
-    
-    today = today_date()
     _store_info({
         "info": "Before preparing from & to dates",
         "bank": doc.name,
@@ -100,7 +103,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     })
     if not from_dt:
         from_dt = today
-        to_dt = today
+        to_dt = None
     else:
         from .datetime import (
             reformat_date,
@@ -110,31 +113,17 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
         from_dt = reformat_date(from_dt)
         if not is_date_gt(today, from_dt):
             from_dt = today
-        # else:
-        #     from frappe.utils import cint
-            
-        #     trans_days = cint(doc.transaction_days)
-        #     if trans_days > 0:
-        #         from .datetime import dates_diff_days
-                
-        #         dif = dates_diff_days(from_dt, today)
-        #         if dif > trans_days:
-        #             from .datetime import add_date
-                    
-        #             dif = dif - trans_days
-        #             from_dt = add_date(from_dt, days=dif, as_string=True)
         
         if not to_dt:
-            to_dt = today
+            to_dt = None
         else:
             to_dt = reformat_date(to_dt)
             if to_dt != from_dt:
                 if is_date_gt(to_dt, today):
-                    to_dt = today
+                    to_dt = None
                 elif is_date_gt(from_dt, to_dt):
-                    to_dt = from_dt
+                    to_dt = None
     
-    err_dates = []
     dates = get_dates_list(from_dt, to_dt)
     _store_info({
         "info": "After preparing from & to dates",
@@ -145,36 +134,47 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     })
     for i in range(len(dates)):
         dt = dates.pop(0)
-        if not queue_bank_transactions_sync(
+        queue_bank_transactions_sync(
             settings, client, doc.name, doc.bank, "Manual",
             data["row_name"], data["account"], data["account_id"],
             data["account_currency"], data["bank_account_ref"],
             dt[0], dt[1], dt[2]
-        ):
-            err_dates.append([dt[0], dt[1]])
-    
-    if not err_dates:
-        return {"success": 1}
-    
-    _store_error({
-        "error": "Error was raised while syncing bank account.",
-        "bank": doc.name,
-        "account": data["account"],
-        "dates": err_dates,
-        "data": data
-    })
-    return {
-        "error": (
-            _("An error was raised while syncing account \"{0}\" of bank \"{1}\".")
-            .format(data["account"], doc.name)
         )
-    }
+    
+    return {"success": 1}
 
 
-# [Internal]
-def get_dates_list(from_dt, to_dt):
-    if from_dt == to_dt:
-        return [[from_dt, from_dt, 1]]
+# [Schedule, Internal]
+def check_sync_data(doc, data, today):
+    from .sync_log import get_sync_data
+    
+    sync_data = get_sync_data(doc.name, data["account"], today)
+    if sync_data is None:
+        _store_info({
+            "error": "Sync log data is invalid.",
+            "bank": doc.name,
+            "account_bank": doc.bank,
+            "account": data["account"]
+        })
+        return 0
+    
+    if len(sync_data) >= _SYNC_LIMIT:
+        _store_info({
+            "error": "Sync exceeded the allowed limit.",
+            "bank": doc.name,
+            "account_bank": doc.bank,
+            "account": data["account"],
+            "limit": _SYNC_LIMIT
+        })
+        return 0
+    
+    return 1
+
+
+# [Schedule, Internal]
+def get_dates_list(from_dt, to_dt=None):
+    if not to_dt or from_dt == to_dt:
+        return [[from_dt, to_dt, 1]]
     
     from .datetime import (
         get_date_obj_range,
@@ -201,32 +201,8 @@ def get_dates_list(from_dt, to_dt):
 def queue_bank_transactions_sync(
     settings, client, bank, account_bank, trigger, row_name,
     account, account_id, account_currency, bank_account_ref,
-    from_dt, to_dt, dt_diff=1
+    from_dt, to_dt=None, dt_diff=1
 ):
-    from .datetime import today_date
-    from .sync_log import get_sync_data
-    
-    today = today_date()
-    sync_data = get_sync_data(bank, account, today)
-    if sync_data is None:
-        _store_info({
-            "error": "Sync log data is invalid.",
-            "bank": bank,
-            "account_bank": account_bank,
-            "account": account
-        })
-        return 0
-    
-    if len(sync_data) >= _SYNC_LIMIT:
-        _store_info({
-            "error": "Sync exceeded the allowed limit.",
-            "bank": bank,
-            "account_bank": account_bank,
-            "account": account,
-            "limit": _SYNC_LIMIT
-        })
-        return 0
-    
     from .background import is_job_running
     
     job_id = f"gocardless-bank-transactions-sync-{account}"
@@ -253,14 +229,12 @@ def queue_bank_transactions_sync(
             from_dt=from_dt,
             to_dt=to_dt
         )
-    
-    return 1
 
 
 # [Internal]
 def sync_bank_transactions(
     settings, client, sync_id, bank, account_bank, trigger, row_name,
-    account, account_id, account_currency, bank_account_ref, from_dt, to_dt
+    account, account_id, account_currency, bank_account_ref, from_dt, to_dt=None
 ):
     transactions = client.get_account_transactions(account_id, from_dt, to_dt)
     if transactions and "error" in transactions:
@@ -300,24 +274,29 @@ def sync_bank_transactions(
                         "account": account
                     })
     finally:
+        from .bank_account import update_bank_account_data
         from .cache import del_cache, clear_doc_cache
         from .sync_log import add_sync_data
         
-        if result.synced:
-            from .bank_account import update_bank_account_data
+        if to_dt:
             from .datetime import date_to_datetime
             
             last_sync = date_to_datetime(to_dt)
-            values = {"last_sync": last_sync}
+        
+        else:
+            from .datetime import today_datetime
             
+            last_sync = today_datetime()
+        
+        values = {"last_sync": last_sync}
+        if result.synced:
             balances = client.get_account_balances(account_id)
             if balances and "error" not in balances:
                 from .common import to_json
                 
                 values["balances"] = to_json(balances)
-            
-            update_bank_account_data(row_name, values)
         
+        update_bank_account_data(row_name, values)
         add_sync_data(sync_id, bank, account, trigger, len(result.entries))
         del_cache(_SYNC_KEY_, account)
         clear_doc_cache("Bank Transaction")
@@ -470,6 +449,7 @@ def new_bank_transaction(
                 "gocardless_transaction_info": data.get("information", ""),
                 "reference_number": data.get("reference_number", ""),
                 "transaction_id": data["transaction_id"],
+                "from_gocardless": 1
             })
             
             handle_transaction_supplier(settings, entry_data, account_bank, data)
@@ -522,6 +502,7 @@ def handle_transaction_supplier(settings, entry, account_bank, data):
                     "supplier_name": name,
                     "supplier_group": settings.supplier_default_group,
                     "supplier_type": "Individual",
+                    "from_gocardless": 1
                 })
                 .insert(ignore_permissions=True, ignore_mandatory=True))
             entry.party_type = dt
@@ -599,6 +580,7 @@ def handle_transaction_customer(settings, entry, account_bank, data):
                     "customer_type": "Individual",
                     "customer_group": settings.customer_default_group,
                     "territory": settings.customer_default_territory,
+                    "from_gocardless": 1
                 })
                 .insert(ignore_permissions=True, ignore_mandatory=True))
             entry.party_type = dt

@@ -95,9 +95,20 @@ class GocardlessBank(Document):
     def before_cancel(self):
         self._check_app_status()
         clear_doc_cache(self.doctype, self.name)
+        if self.auth_id:
+            self.flags.remove_auth = 1
     
     
     def on_cancel(self):
+        from erpnext_gocardless_bank.libs import dequeue_jobs
+        
+        dequeue_jobs(self.name, [v.account for v in self.bank_accounts])
+        
+        if self.flags.get("remove_auth", 0):
+            from erpnext_gocardless_bank.libs import remove_bank_auth
+            
+            remove_bank_auth(self.company, self.auth_id)
+        
         self._clean_flags()
     
     
@@ -107,19 +118,11 @@ class GocardlessBank(Document):
             self._error(_("Submitted bank can't be removed."))
         
         clear_doc_cache(self.doctype, self.name)
-        if self.auth_id:
-            self.flags.remove_auth = 1
-        
         if self.bank_ref:
             self.flags.trash_bank = 1
     
     
     def after_delete(self):
-        if self.flags.get("remove_auth", 0):
-            from erpnext_gocardless_bank.libs import remove_bank_auth
-            
-            remove_bank_auth(self.company, self.auth_id)
-        
         if self.flags.get("trash_bank", 0):
             from erpnext_gocardless_bank.libs import enqueue_bank_trash
             
@@ -127,7 +130,8 @@ class GocardlessBank(Document):
                 self.name,
                 self.company,
                 self.bank_ref,
-                [v.bank_account_ref for v in self.bank_accounts if v.bank_account_ref]
+                [v.bank_account_ref for v in self.bank_accounts if v.bank_account_ref],
+                [v.bank_account_type_ref for v in self.bank_accounts if v.bank_account_type_ref]
             )
         
         self._clean_flags()
@@ -162,9 +166,9 @@ class GocardlessBank(Document):
             return self._reset_bank()
         
         if self.is_new() or self.has_value_changed("company"):
-            from erpnext_gocardless_bank.libs import get_company_country
+            from erpnext_gocardless_bank.libs import get_company_country_name
             
-            country = get_company_country(self.company)
+            country = get_company_country_name(self.company)
             if not country and self.country:
                 self.country = None
             elif country and self.country != country:
@@ -174,9 +178,9 @@ class GocardlessBank(Document):
             return self._reset_bank()
         
         if self.is_new() or self.has_value_changed("bank"):
-            from erpnext_gocardless_bank.libs import get_banks
+            from erpnext_gocardless_bank.libs import get_banks_list
             
-            banks = get_banks(self.company, self.country, raw=True)
+            banks = get_banks_list(self.company)
             if not banks:
                 self.flags.bank_validate_error = 1
                 return self._reset_bank()
@@ -184,6 +188,7 @@ class GocardlessBank(Document):
             for i in range(len(banks)):
                 v = banks.pop(0)
                 if v["name"] == self.bank:
+                    banks.clear()
                     return self._reset_bank(v)
             
             self.flags.bank_support_error = 1

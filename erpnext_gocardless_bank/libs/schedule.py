@@ -32,7 +32,7 @@ def update_banks_status():
         filters=[
             [dt, "auth_id", "!=", ""],
             [dt, "auth_status", "=", "Linked"],
-            [dt, "auth_expiry", "<", today_date()]
+            [dt, "auth_expiry", "<=", today_date()]
         ],
         pluck="name",
         ignore_permissions=True,
@@ -95,7 +95,7 @@ def sync_banks():
             [dt, "auto_sync", "=", 1],
             [dt, "auth_id", "!=", ""],
             [dt, "auth_status", "=", "Linked"],
-            [dt, "auth_expiry", ">=", today_date()]
+            [dt, "auth_expiry", ">", today_date()]
         ],
         pluck="name",
         ignore_permissions=True,
@@ -115,26 +115,29 @@ def sync_banks():
 
 # [Internal]
 def sync_bank(settings, name, today, trigger):
-    # from frappe.utils import cint
-    
     from .bank import get_bank_doc
+    
+    doc = get_bank_doc(name)
+    if not doc:
+        return 0
+    
+    from .system import get_client
+    
+    client = get_client(doc.company, settings)
+    if isinstance(client, dict):
+        return 0
+    
     from .bank_transaction import (
         _SYNC_KEY_,
-        queue_bank_transactions_sync,
-        get_dates_list
+        check_sync_data,
+        get_dates_list,
+        queue_bank_transactions_sync
     )
     from .cache import get_cache
     from .datetime import (
         reformat_datetime,
         is_date_gt
     )
-    from .system import get_client
-    
-    doc = get_bank_doc(name)
-    # trans_days = cint(doc.transaction_days)
-    client = get_client(doc.company, settings)
-    if isinstance(client, dict):
-        return 0
     
     for v in doc.bank_accounts:
         if (
@@ -153,44 +156,28 @@ def sync_bank(settings, name, today, trigger):
             "bank_account_ref": v.bank_account_ref,
             "last_sync": v.last_sync
         }
+        if not check_sync_data(doc, row, today):
+            continue
+        
         fdt = today
-        tdt = today
+        tdt = None
         if row["last_sync"]:
             fdt = reformat_datetime(row["last_sync"])
             fdt = fdt.split(" ")[0]
             if not is_date_gt(today, fdt):
                 fdt = today
-            # elif trans_days > 0:
-            #     from .datetime import dates_diff_days
-                
-            #     dif = dates_diff_days(fdt, tdt)
-            #     if dif > trans_days:
-            #         from .datetime import add_date
-                    
-            #         dif = dif - trans_days
-            #         fdt = add_date(fdt, days=dif, as_string=True)
+            else:
+                tdt = today
         
-        err_dates = []
         dates = get_dates_list(fdt, tdt)
         for i in range(len(dates)):
             dt = dates.pop(0)
-            if not queue_bank_transactions_sync(
+            queue_bank_transactions_sync(
                 settings, client, doc.name, doc.bank, trigger,
                 row["row_name"], row["account"], row["account_id"],
                 row["account_currency"], row["bank_account_ref"],
                 dt[0], dt[1], dt[2]
-            ):
-                err_dates.append([dt[0], dt[1]])
-        
-        if err_dates:
-            _store_error({
-                "error": "Error was raised in schedule while syncing bank account.",
-                "bank": doc.name,
-                "account": row["account"],
-                "trigger": trigger,
-                "dates": err_dates,
-                "data": row
-            })
+            )
 
 
 # [Internal]

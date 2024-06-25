@@ -15,7 +15,10 @@ def add_account_type(name):
     
     try:
         (frappe.new_doc(dt)
-            .update({"account_type": name})
+            .update({
+                "account_type": name,
+                "from_gocardless": 1
+            })
             .insert(ignore_permissions=True, ignore_mandatory=True))
         
         from .cache import clear_doc_cache

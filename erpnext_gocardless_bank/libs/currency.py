@@ -8,7 +8,7 @@ import frappe
 
 
 # [Bank Account, Internal]
-def get_currencies_status():
+def get_currencies_with_status():
     from .cache import get_cache
     
     dt = "Currency"
@@ -54,13 +54,13 @@ def enqueue_add_currencies(names):
 
 # [Bank Transaction]
 def get_currency_status(name):
-    data = get_currencies_status()
+    data = get_currencies_with_status()
     return data.get(name, None)
 
 
 # [Bank Transaction, Internal]
 def add_currencies(names):
-    currencies = get_currencies_status()
+    currencies = get_currencies_with_status()
     dt = "Currency"
     cnt = 0
     for name in list(set(names)):
@@ -109,7 +109,7 @@ def enqueue_enable_currencies(names):
 
 # [Internal]
 def enable_currencies(names):
-    currencies = get_currencies_status()
+    currencies = get_currencies_with_status()
     dt = "Currency"
     cnt = 0
     for name in list(set(names)):

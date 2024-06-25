@@ -15,7 +15,7 @@ def settings():
     return get_cached_doc("Gocardless Settings")
 
 
-# [Bank Account, Schedule, Internal]
+# [Schedule, Internal]
 def is_enabled():
     return settings()._is_enabled
 
@@ -40,7 +40,7 @@ def check_app_status():
         error(app_disabled_message())
 
 
-# [Bank Account, Bank Transaction, Internal]
+# [Bank Transaction, Internal]
 def app_disabled_message():
     from erpnext_gocardless_bank import __module__
     
@@ -80,7 +80,5 @@ def get_client(company: str, doc=None):
     
     if ret:
         doc.save(ignore_permissions=True)
-    else:
-        client.set_access(row.access_token)
     
     return client

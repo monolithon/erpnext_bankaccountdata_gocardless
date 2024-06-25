@@ -8,62 +8,58 @@ import frappe
 from frappe import _
 
 
-# [G Bank, G Bank Form]
+# [G Bank Form]
 @frappe.whitelist()
-def get_banks(company, country=None, pay_option=0, raw=False):
-    if (
-        not company or not isinstance(company, str) or
-        (country and not isinstance(country, str)) or
-        (pay_option and not isinstance(pay_option, int))
-    ):
+def get_banks(company):
+    if not company or not isinstance(company, str):
         return {"error": _("Arguments required to load supported banks is invalid.")}
     
-    if not country:
-        from .company import get_company_country
-        
-        country = get_company_country(company)
-        if not country:
-            return {"error": _("Company \"{0}\" doesn't have a valid country.").format(company)}
+    return get_banks_list(company, False)
+
+
+# [G Bank, Internal]
+def get_banks_list(company: str, raw=True):
+    from .company import get_company_country_name
     
-    if len(country) > 2:
-        from .country import get_country_code
+    country = get_company_country_name(company)
+    if not country:
+        if raw:
+            return None
         
-        code = get_country_code(country)
-        if not code:
-            return {"error": _("Country \"{0}\" doesn't exist.").format(country)}
+        return {"error": _("Company \"{0}\" doesn't have a valid country.").format(company)}
+    
+    from .country import get_country_code
+    
+    code = get_country_code(country)
+    if not code:
+        if raw:
+            return None
         
-        country = code.upper()
-    else:
-        from .country import country_code_exists
-        
-        if not country_code_exists(country):
-            return {"error": _("Country code \"{0}\" doesn't exist.").format(country)}
-        
-        country = country.upper()
+        return {"error": _("Country \"{0}\" doesn't exist.").format(country)}
     
     from .cache import get_cache
     
     dt = "Gocardless"
-    key = f"banks-list-{country}"
-    if pay_option:
-        key = f"{key}-pay"
-    
+    key = f"banks-list-{code}"
     data = get_cache(dt, key, True)
     if not isinstance(data, list):
         from .system import get_client
         
         client = get_client(company)
         if isinstance(client, dict):
+            if raw:
+                return None
+            
             return client
         
-        data = client.get_banks(country, 1 if pay_option else 0)
+        data = client.get_banks(code)
     
     if data and isinstance(data, list):
         from .cache import set_cache
         
         set_cache(dt, key, data, 7 * 24 * 60 * 60)
     
-    if raw and not isinstance(data, list):
+    if raw and (not data or not isinstance(data, list)):
         return None
     
     return data
@@ -79,15 +75,6 @@ def get_bank_auth(name, ref_id, company, bank, bank_id, transaction_days=0):
         not bank or not isinstance(bank, str) or
         not bank_id or not isinstance(bank_id, str)
     ):
-        _store_error({
-            "error": "Invalid bank link data args",
-            "name": name,
-            "ref_id": ref_id,
-            "company": company,
-            "bank": bank,
-            "bank_id": bank_id,
-            "transaction_days": transaction_days
-        })
         return {"error": _("Arguments required to get bank link data is invalid.")}
     
     from .system import get_client
@@ -114,10 +101,12 @@ def save_bank_auth(name, bank, bank_id, auth_id, auth_expiry):
     doc = get_bank_doc(name)
     if not doc:
         return {"error": _("Bank \"{0}\" doesn't exist.").format(name)}
-    if not doc._is_submitted:
+    if doc._is_draft:
         return {"error": _("Bank \"{0}\" can't be authorized before being submitted.").format(name)}
+    if doc._is_cancelled:
+        return {"error": _("Bank \"{0}\" can't be authorized after being cancelled.").format(name)}
     if doc.bank != bank or doc.bank_id != bank_id:
-        return {"error": _("Authorization data for \"{0}\" is invalid.").format(name)}
+        return {"error": _("Authorization data for bank \"{0}\" is invalid.").format(name)}
     
     doc.auth_id = auth_id
     doc.auth_expiry = auth_expiry
@@ -130,7 +119,7 @@ def save_bank_auth(name, bank, bank_id, auth_id, auth_expiry):
 def enqueue_sync_bank(name, bank, company, auth_id):
     from .background import is_job_running
     
-    job_id = f"gocardless-sync-bank-{bank}"
+    job_id = f"gocardless-sync-bank-{name}"
     if not is_job_running(job_id):
         from .background import enqueue_job
         
@@ -143,6 +132,15 @@ def enqueue_sync_bank(name, bank, company, auth_id):
             company=company,
             auth_id=auth_id
         )
+
+
+# [G Bank]
+def dequeue_jobs(name, accounts):
+    from .background import dequeue_job
+    
+    dequeue_job(f"gocardless-sync-bank-{name}")
+    for account in accounts:
+        dequeue_job(f"gocardless-bank-transactions-sync-{account}")
 
 
 # [Internal]*
@@ -190,7 +188,9 @@ def add_bank(bank: str):
         clear_doc_cache(dt)
         return bank
     except Exception as exc:
-        _store_error({
+        from .common import store_error
+        
+        store_error({
             "error": "Unable to add bank to ERPNext.",
             "bank": bank,
             "exception": str(exc)
@@ -212,13 +212,6 @@ def get_bank_doc(name):
     from .cache import get_cached_doc
     
     return get_cached_doc("Gocardless Bank", name)
-
-
-# [Internal]
-def _store_error(data):
-    from .common import store_error
-    
-    store_error(data)
 
 
 # [Internal]

@@ -43,7 +43,7 @@ def clear_doc_cache(dt: str, name: str=None):
     frappe.clear_document_cache(dt, name)
 
 
-# [Bank, Company]
+# [Bank, Company, Country]
 def get_cached_value(dt: str, name: str, field: str | list, raw: bool=False):
     if not field or not isinstance(field, (str, list)):
         return None

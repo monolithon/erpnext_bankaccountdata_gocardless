@@ -5,7 +5,7 @@
 
 
 class Api:
-    url = "https://ob.gocardless.com/api/v2/"
+    url = "https://bankaccountdata.gocardless.com/api/v2/"
     headers = {"Accept": "application/json"}
     post_headers = {"Content-Type": "application/json"}
     valid_status_codes = [200, 201]
@@ -16,16 +16,10 @@ class Api:
     
     
     @staticmethod
-    def list_banks(country, pay_option):
+    def list_banks(country):
         uri = "institutions/"
-        qry = []
         if country:
-            qry.append(f"country={country}")
-        if pay_option:
-            qry.append("payments_enabled=true")
-        if qry:
-            qry = "&".join(qry)
-            uri = f"{uri}?{qry}"
+            uri = f"{uri}?country={country}"
         
         return uri
     
@@ -303,16 +297,16 @@ class Api:
     def parse_error(data):
         if data and isinstance(data, dict):
             if "summary" in data and "detail" in data:
-                err = {"error": data.pop("summary")}
+                err = {"error": str(data.pop("summary")).strip(".") + "."}
                 if err["error"] != data["detail"]:
-                    err["detail"] = data.pop("detail")
+                    err["detail"] = str(data.pop("detail")).strip(".") + "."
                 return err
             
             if (
                 "id" in data and "aspsp_identifier" in data and
                 "status" in data and data["status"] == "ERROR"
             ):
-                return {"error": "Account state does not support this operation."}
+                return {"error": "Account state doesn't support this operation."}
             
             for k in Api.errors["list"]["many"]:
                 if data.get(k, "") and isinstance(data[k], list):
@@ -327,7 +321,7 @@ class Api:
                     data.get(k, "") and isinstance(data[k], list) and
                     isinstance(data[k][0], str) and data[k][0]
                 ):
-                    return {"error": data.pop(k)[0]}
+                    return {"error": str(data.pop(k)[0]).strip(".") + "."}
             
             for k in Api.errors["dict"]["group"]:
                 if (
@@ -336,4 +330,4 @@ class Api:
                 ):
                     return Api.parse_error(data.pop(k))
         
-        return {"error": "Api response received is invalid."}
+        return {"error": "Response received is invalid."}

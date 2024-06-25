@@ -8,7 +8,7 @@ import frappe
 
 
 # [G Bank]
-def enqueue_bank_trash(name, company, bank_ref, accounts_ref):
+def enqueue_bank_trash(name, company, bank_ref, accounts_ref, account_types_ref):
     from .background import is_job_running
     
     job_id = f"gocardless-bank-trash-{name}"
@@ -23,12 +23,13 @@ def enqueue_bank_trash(name, company, bank_ref, accounts_ref):
             name=name,
             bank=bank_ref,
             company=company,
-            accounts=accounts_ref
+            accounts=accounts_ref,
+            account_types=account_types_ref
         )
 
 
 # [Internal]
-def clean_trash(name, bank, company, accounts):
+def clean_trash(name, bank, company, accounts, account_types):
     from .system import settings
     
     doc = settings()
@@ -47,6 +48,7 @@ def clean_trash(name, bank, company, accounts):
     
     if accounts and doc._clean_bank_account:
         clean_bank_accounts(accounts, bank, company)
+        clean_bank_account_types(account_types)
     
     if bank and doc._clean_bank:
         clean_bank(bank)
@@ -123,6 +125,33 @@ def clean_bank_accounts(names, bank, company):
 
 
 # [Internal]
+def clean_bank_account_types(names):
+    dt = "Bank Account"
+    types = frappe.get_all(
+        dt,
+        fields=["account_type"],
+        filters=[[dt, "account_type", "in", names]],
+        pluck="account_type",
+        ignore_permissions=True,
+        strict=False
+    )
+    if types and isinstance(types, list):
+        for v in types:
+            if v in names:
+                names.remove(v)
+        
+        if not names:
+            return 0
+    
+    dt = "Bank Account Type"
+    filters = [
+        [dt, "name", "in", names],
+        [dt, "from_gocardless", "=", 1]
+    ]
+    clean_entries(dt, filters)
+
+
+# [Internal]
 def clean_bank(name):
     dt = "Bank"
     clean_entries(dt, [
@@ -178,6 +207,8 @@ def clean_entries(dt, filters):
         strict=False
     )
     if names and isinstance(names, list):
+        frappe.flags.from_gocardless_trash = 1
+        
         for name in names:
             try:
                 frappe.delete_doc(
@@ -188,3 +219,5 @@ def clean_entries(dt, filters):
                 )
             except Exception:
                 pass
+        
+        frappe.flags.pop("from_gocardless_trash", 0)

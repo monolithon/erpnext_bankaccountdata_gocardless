@@ -25,7 +25,6 @@ class Gocardless:
     
     def __init__(self):
         self.access = None
-        self.token = None
     
     
     @property
@@ -34,14 +33,21 @@ class Gocardless:
     
     
     # [Access]
+    def set_access(self, token: str):
+        if not token or not isinstance(token, str):
+            self._log_error(_("Gocardless access token is invalid."))
+        
+        self.access = token
+    
+    
+    # [Access]
     def connect(self, secret_id: str, secret_key: str):
         if (
             not secret_id or not isinstance(secret_id, str) or
             not secret_key or not isinstance(secret_key, str)
         ):
-            err = _("Gocardless secret id or key is invalid.")
-            self._log_error(err)
-            return {"error": err}
+            self._log_error(_("Gocardless secret id or key is invalid."))
+            return None
         
         data = self._send(
             Api.new_token,
@@ -52,7 +58,7 @@ class Gocardless:
             auth=False
         )
         if data is None or "error" in data:
-            return data
+            return None
         
         if (
             not data.get("access", "") or
@@ -65,26 +71,11 @@ class Gocardless:
             not isinstance(data["refresh_expires"], (str, int))
         ):
             self._store_error({"error": "Invalid token received.", "data": data})
-            err = _("Gocardless token received is invalid.")
-            self._log_error(err)
-            return {"error": err}
+            self._log_error(_("Gocardless token received is invalid."))
+            return None
         
         self.access = data["access"]
-        self.token = data
         return data
-    
-    
-    # [Access]
-    def set_access(self, token: str):
-        if not token or not isinstance(token, str):
-            self._log_error(_("Gocardless access token is invalid."))
-        
-        self.access = token
-    
-    
-    # [Access]
-    def get_token(self):
-        return self.token
     
     
     # [Access]
@@ -112,12 +103,12 @@ class Gocardless:
             return None
         
         self.access = data["access"]
-        self.token = data
+        return data
     
     
     # [Bank]
-    def get_banks(self, country: str=None, pay_option: int=0):
-        data = self._send(Api.list_banks(country, pay_option), is_list=True)
+    def get_banks(self, country: str=None):
+        data = self._send(Api.list_banks(country), is_list=True)
         if data is None or "error" in data:
             return data
         
@@ -228,13 +219,14 @@ class Gocardless:
             self._log_error(err)
             return {"error": err}
         
-        data["name"] = docname
-        data["bank"] = bank
-        data["bank_id"] = bank_id
-        data["auth_id"] = data.pop("id")
-        data["auth_link"] = data.pop("link")
-        data["auth_expiry"] = agreement["access_valid_for_days"]
-        return data
+        return {
+            "name": docname,
+            "bank": bank,
+            "bank_id": bank_id,
+            "auth_id": data["id"],
+            "auth_link": data["link"],
+            "auth_expiry": agreement["access_valid_for_days"]
+        }
     
     
     # [Bank]
@@ -389,7 +381,7 @@ class Gocardless:
     
     
     # [Bank Transaction]
-    def get_account_transactions(self, account_id: str, date_from: str=None, date_to: str=None):
+    def get_account_transactions(self, account_id: str, date_from: str, date_to: str=None):
         data = self._send(Api.account_transactions(account_id, date_from, date_to))
         if data is None or "error" in data:
             return data
@@ -509,13 +501,13 @@ class Gocardless:
     def _report_error(response):
         error = Api.parse_error(response)
         if isinstance(error, dict) and "error" in error:
-            err = error.pop("error").strip(".") + "."
+            err = error.pop("error")
         elif isinstance(error, list):
             err = []
             for i in range(len(error)):
                 v = error.pop(0)
                 if isinstance(v, dict) and "error" in v:
-                    err.append(v.pop("error").strip(".") + ".")
+                    err.append(v.pop("error"))
             
             err = "\n".join(err) if err else None
         else:

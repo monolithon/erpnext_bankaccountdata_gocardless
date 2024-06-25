@@ -152,7 +152,7 @@
             document.getElementsByTagName('head')[0].appendChild(this.$makeElem('link', o));
             return this;
         },
-        $load(c, o) {
+        $loadStyle(c, o) {
             o = this.$assign(o || {}, {innerHTML: c, type: 'text/css'});
             document.getElementsByTagName('head')[0].appendChild(this.$makeElem('style', o));
             return this;
@@ -222,16 +222,15 @@
         _info() { return this.$console('info', arguments); }
         _warn() { return this.$console('warn', arguments); }
         _error() { return this.$console('error', arguments); }
-        ajax(u, o, s, f) {
+        ajax(u, o, s, f, x) {
             o = this.$extend(1, {
                 url: u, method: 'GET', cache: false, 'async': true, crossDomain: true,
                 headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
                 success: this.$fn(function(r, t) {
-                    if (this._exit) return;
-                    (s = this.$fn(s)) && s(r, t);
+                    (x || !this._exit) && (s = this.$fn(s)) && s(r, t);
                 }),
                 error: this.$fn(function(r, t) {
-                    if (this._exit) return;
+                    if (!x && this._exit) return;
                     r = this.$isStrVal(r) ? __(r) : (this.$isStrVal(t) ? __(t)
                         : __('The ajax request sent raised an error.'));
                     (f = this.$fn(f)) ? f({message: r}) : this._error(r);
@@ -246,6 +245,7 @@
             } finally { this._err = 0; }
             return this;
         }
+        xajax(u, o, s, f) { return this.ajax(u, o, s, f, 1); }
         get_method(v) { return this._ns + v; }
         request(m, a, s, f, x) {
             s = this.$fn(s);
@@ -278,6 +278,7 @@
             } finally { this._err = 0; }
             return this;
         }
+        xrequest(m, a, s, f) { return this.request(m, a, s, f, 1); }
         on(e, fn)  { return this._on(e, fn); }
         xon(e, fn)  { return this._on(e, fn, 0, 1); }
         once(e, fn) { return this._on(e, fn, 1); }
@@ -340,11 +341,11 @@
             !ret.length ? this._off(e) : (this._events.list[e] = ret);
         }
         _emit(e, a, p) {
-            let ev = this._events.list[e].slice(), ret = [];
+            let ev = this._events.list[e].slice(), rl = this._exit && !!this._events.real[e], ret = [];
             p && p.catch(this.$fn(function(z) { this._error('Events emit', e, a, z.message); }));
             for (let x = 0, i = 0, l = ev.length; i < l; i++) {
-                p ? p.then(this.$xtry(ev[i].f, a)) : this.$try(ev[i].f, a);
-                !ev[i].o && (ret[x++] = ev[i]);
+                if (ev[i].s || !rl) p ? p.then(this.$xtry(ev[i].f, a)) : this.$try(ev[i].f, a);
+                if (ev[i].s || !ev[i].o) ret[x++] = ev[i];
             }
             !ret.length ? this._off(e) : (this._events.list[e] = ret);
         }
@@ -588,14 +589,14 @@
             this._win = {
                 e: {
                     unload: this.$fn(this.destroy),
-                    change: this.$fn(function() { !this._win.c && this._win.fn(); }),
+                    change: this.$fn(function() { this._win.fn(); }),
                 },
                 c: 0,
                 fn: this.$fn(function() {
                     if (this._win.c || !LUR.get(this)) return;
                     this._win.c++;
                     this._exit++;
-                    this.emit('page_change page_clean');
+                    this.emit('page_change page_clean').off(1);
                     this.$timeout(function() {
                         this._win.c--;
                         this._exit--;
@@ -607,7 +608,6 @@
         }
         options(opts) { return this.$static(opts); }
         destroy() {
-            this._win.fn.cancel();
             LUR.off(this);
             removeEventListener('beforeunload', this._win.e.unload);
             this.emit('page_clean destroy after_destroy').off(1);
@@ -997,9 +997,9 @@
                 is_enabled: 0,
                 transaction_days: 90,
             });
-            this.request(
+            this.xrequest(
                 'get_settings', null, this._init,
-                function() { this._error('Getting settings failed.'); }, 1
+                function() { this._error('Getting settings failed.'); }
             );
         }
         _init(opts) {
@@ -1015,36 +1015,36 @@
             .emit('ready');
         }
         get_auth(docname, company, bank, bank_id, transaction_days, success, error) {
-            success = this.$fn(success);
-            if (!success) return this;
-            
-            var ref_id = '_' + frappe.utils.get_random(16);
             transaction_days = cint(transaction_days);
-            if (transaction_days < 1) transaction_days = this._transaction_days;
-            error = this.$fn(error);
+            var args = {
+                name: docname,
+                ref_id: '_' + frappe.utils.get_random(16),
+                company: company,
+                bank: bank,
+                bank_id: bank_id,
+                transaction_days: transaction_days > 0 ? transaction_days : this._transaction_days,
+            };
+            if (!(success = this.$fn(success))) {
+                this._error('Invalid bank auth success function.', args);
+                return this;
+            }
             
             return this.request(
-                'get_bank_auth',
-                {
-                    name: docname,
-                    ref_id: ref_id,
-                    company: company,
-                    bank: bank,
-                    bank_id: bank_id,
-                    transaction_days: transaction_days
-                },
+                'get_bank_auth', args,
                 function(ret) {
-                    if (!this.$isDataObj(ret))
-                        return this.error(__('Bank link data received is invalid.'));
+                    if (!this.$isDataObj(ret)) {
+                        this._error('Invalid bank auth data received.', ret, args);
+                        return this.error(__('Bank auth data received is invalid.'));
+                    }
                     
                     ret.auth_expiry_int = cint(ret.auth_expiry);
                     ret.auth_expiry = moment().add(ret.auth_expiry_int, 'days').format(frappe.defaultDateFormat);
-                    this.cache().set('gocardless_' + ref_id, ret, 10 * 60 * 60);
-                    this._log('Bank auth received', ret);
+                    this.cache().set('gocardless_' + args.ref_id, ret, 10 * 60 * 60);
                     success(ret.auth_link);
                 },
                 function(e) {
-                    error ? error(e) : this.error(e.self ? e.message : __('Unable to get Gocardless bank link data.'));
+                    this._error('Failed to get bank auth data.', args, e.message);
+                    (error = this.$fn(error)) ? error(e) : this.error(e.self ? e.message : __('Unable to get Gocardless bank link data.'));
                 }
             );
         }
@@ -1066,7 +1066,15 @@
             return {data: val};
         }
         save_auth(data, success, error) {
-            return this.request('save_bank_auth', data, this.$fn(success), this.$fn(error), 1);
+            return this.xrequest(
+                'save_bank_auth', data,
+                function(ret) {
+                    if (!this._exit && (success = this.$fn(success))) success(ret);
+                },
+                function(e) {
+                    if (!this._exit && (error = this.$fn(error))) error(e);
+                }
+            );
         }
     }
     
@@ -1100,6 +1108,6 @@
         );
         $.fn.hidden = function(s) { return this.toggleClass('lu-hidden', !!s); };
         $.fn.isHidden = function() { return this.hasClass('lu-hidden'); };
-        !LU.$hasElem('lu-style') && LU.$load('.lu-hidden { display: none; }', {id: 'lu-style'});
+        !LU.$hasElem('lu-style') && LU.$loadStyle('.lu-hidden { display: none; }', {id: 'lu-style'});
     });
 }());

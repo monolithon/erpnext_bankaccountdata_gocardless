@@ -12,9 +12,6 @@ frappe.ui.form.on('Gocardless Bank', {
             .on('ready change', function() { this.setup_form(frm); })
             .on('on_alert', function(d, t) {
                 frm._bank.errs.includes(t) && (d.title = __(frm.doctype));
-            })
-            .on('page_change', function() {
-                this.off('reload_bank_accounts bank_error');
             });
         frm._bank = {
             errs: ['fatal', 'error'],
@@ -200,7 +197,7 @@ frappe.ui.form.on('Gocardless Bank', {
     },
     load_banks: function(frm, init) {
         if (init) frm._bank.inits.setup = 1;
-        var key = cstr(frm.doc.country);
+        var key = cstr(frm.doc.company);
         if (frappe.gc_banks.key === key) return;
         !frappe.gc_banks.field && frappe.gc_banks.setup(frm);
         let data = frappe.gc_banks.load(key);
@@ -208,10 +205,7 @@ frappe.ui.form.on('Gocardless Bank', {
         if (!frm._bank.is_draft) return frappe.gc_banks.reset(frm);
         frappe.gc().request(
             'get_banks',
-            {
-                company: cstr(frm.doc.company),
-                country: key
-            },
+            {company: key},
             function(ret) {
                 if (!this.$isArr(ret)) {
                     if (init) return frappe.gc_banks.reset(frm);
@@ -220,7 +214,7 @@ frappe.ui.form.on('Gocardless Bank', {
                 }
                 if (!ret.length) {
                     if (init) return frappe.gc_banks.reset(frm);
-                    this._error('Empty banks list.', ret);
+                    this._error('Empty banks list.', key, ret);
                     return this.error(__('Gocardless banks list received is empty.'));
                 }
                 frappe.gc_banks.store(key, ret);
@@ -824,10 +818,15 @@ frappe.gc_accounts = {
             'enqueue_bank_transactions_sync',
             args,
             function(ret) {
-                if (!this.$isDataObj(ret)) {
+                if (!ret) {
                     me._remove_spinner($el, $spinner);
                     this._error('Accounts: bank account sync failed');
                     return this.error_(__('Unable to sync the bank account "{0}".', [account]));
+                }
+                if (this.$isDataObj(ret) && ret.info) {
+                    me._remove_spinner(null, $spinner);
+                    me._toggle_btn($el, false);
+                    return this.info_(ret.info);
                 }
                 me._remove_spinner($el, $spinner);
                 this._log('Accounts: bank account sync success');

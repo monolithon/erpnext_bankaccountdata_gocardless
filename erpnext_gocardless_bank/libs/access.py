@@ -12,6 +12,7 @@ def update_access(row, client):
     from .datetime import is_now_datetime_gt
     
     if not is_now_datetime_gt(row.access_expiry):
+        client.set_access(row.access_token)
         return 0
     
     if not is_now_datetime_gt(row.refresh_expiry):
@@ -22,19 +23,18 @@ def update_access(row, client):
 
 # [Internal]
 def access_connect(row, client):
-    client.connect(row.secret_id, row.secret_key)
-    return update_access_data(row, client, True)
+    data = client.connect(row.secret_id, row.secret_key)
+    return update_access_data(data, row, client, True)
 
 
 # [Internal]
 def access_refresh(row, client):
-    client.refresh(row.refresh_token)
-    return update_access_data(row, client)
+    data = client.refresh(row.refresh_token)
+    return update_access_data(data, row, client)
 
 
 # [Internal]
-def update_access_data(row, client, _all=False):
-    data = client.get_token()
+def update_access_data(data, row, client, _all=False):
     if not data or not isinstance(data, dict):
         return -1
     

@@ -24,14 +24,44 @@ doctype_js = {
     "Gocardless Sync Log" : "public/js/gocardless.bundle.js",
     "Gocardless Settings" : "public/js/gocardless.bundle.js",
     
-    "Bank Account" : "public/js/bank_account.bundle.js",
-    "Bank Transaction" : "public/js/bank_transaction.bundle.js"
+    "Bank" : "public/js/doctype/bank.bundle.js",
+    "Bank Account" : "public/js/doctype/bank_account.bundle.js",
+    "Bank Account Type" : "public/js/doctype/bank_account_type.bundle.js",
+    "Bank Transaction" : "public/js/doctype/bank_transaction.bundle.js",
+    "Currency" : "public/js/doctype/currency.bundle.js",
+    "Supplier" : "public/js/doctype/supplier.bundle.js",
+    "Customer" : "public/js/doctype/customer.bundle.js",
 }
 
 
 doctype_list_js = {
     "Gocardless Bank" : "public/js/gocardless.bundle.js",
     "Gocardless Sync Log" : "public/js/gocardless.bundle.js"
+}
+
+
+doc_events = {
+    "Bank": {
+        "on_trash": "erpnext_gocardless_bank.libs.crud.bank.on_trash_event"
+    },
+    "Bank Account": {
+        "on_trash": "erpnext_gocardless_bank.libs.crud.bank_account.on_trash_event"
+    },
+    "Bank Account Type": {
+        "on_trash": "erpnext_gocardless_bank.libs.crud.bank_account_type.on_trash_event"
+    },
+    "Bank Transaction": {
+        "on_trash": "erpnext_gocardless_bank.libs.crud.bank_transaction.on_trash_event"
+    },
+    "Currency": {
+        "on_trash": "erpnext_gocardless_bank.libs.crud.currency.on_trash_event"
+    },
+    "Supplier": {
+        "on_trash": "erpnext_gocardless_bank.libs.crud.supplier.on_trash_event"
+    },
+    "Customer": {
+        "on_trash": "erpnext_gocardless_bank.libs.crud.customer.on_trash_event"
+    }
 }
 
 

@@ -10,18 +10,16 @@ if (typeof frappe.gc !== 'function')
     frappe.require('/assets/erpnext_gocardless_bank/js/gocardless.bundle.js');
 
 
-frappe.ui.form.on('Bank Transaction', {
+frappe.ui.form.on('Bank Account Type', {
     onload: function(frm) {
-        if (cstr(frm.doc.description).length)
-            frm.toggle_display('description', true);
-        
+        if (frm.is_new()) return;
         function gc_init() {
             if (typeof frappe.gc !== 'function')
                 return setTimeout(gc_init, 300);
             
-            frappe.gc().on('ready change', function() {
-                if (this.$isStrVal(frm.doc.gocardless_transaction_info))
-                    frm.toggle_display('gocardless_transaction_info', !!this.is_enabled);
+            frappe.gc().on('ready', function() {
+                if (cint(frm.doc.from_gocardless))
+                    this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'green'});
             });
         }
         gc_init();
