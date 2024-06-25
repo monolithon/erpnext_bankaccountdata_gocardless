@@ -394,12 +394,12 @@ frappe.gc_accounts = {
             .on('page_change', this._destroy)
             .on('change', this._refresh);
         this.wait();
-        if (!frappe.gc().$isArrVal(this._frm.doc.bank_accounts))
-            this._wait_tm = frappe.gc().$timeout(function() {
-                this._wait_tm = null;
-                this._frm._bank.inits.reload = 1;
-                this._frm.reload_doc();
-            }, 60 * 1000, null, this);
+        if (frappe.gc().$isArrVal(this._frm.doc.bank_accounts)) this.load();
+        else this._wait_tm = frappe.gc().$timeout(function() {
+            this._wait_tm = null;
+            this._frm._bank.inits.reload = 1;
+            this._frm.reload_doc();
+        }, 60 * 1000, null, this);
         return 1;
     },
     wait() {
