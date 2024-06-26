@@ -19,7 +19,16 @@ frappe.ui.form.on('Customer', {
             
             frappe.gc().on('ready', function() {
                 if (cint(frm.doc.from_gocardless))
-                    this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'green'});
+                    this.disable_form(frm, {
+                        message: __('Linked to Gocardless.'), color: 'green',
+                        ignore: this.$filter(frm.meta.fields, function(v) {
+                            return ![
+                                'customer_name',
+                                'default_bank_account',
+                                'from_gocardless'
+                            ].includes(v.fieldname);
+                        })
+                    });
             });
         }
         gc_init();

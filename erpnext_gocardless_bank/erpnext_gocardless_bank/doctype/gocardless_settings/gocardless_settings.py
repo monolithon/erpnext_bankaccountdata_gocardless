@@ -56,6 +56,11 @@ class GocardlessSettings(Document):
     
     
     @property
+    def _clean_bank_account_type(self):
+        return cint(self.clean_bank_account_type_dt) > 0
+    
+    
+    @property
     def _clean_bank_transaction(self):
         return cint(self.clean_bank_transaction_dt) > 0
     
@@ -77,6 +82,30 @@ class GocardlessSettings(Document):
     
     def _set_defaults(self):
         ign = "Ignore"
+        if self.bank_account_type_exist_for_bank_account == ign:
+            if self.bank_account_type_of_bank_account_is_empty != ign:
+                self.bank_account_type_of_bank_account_is_empty = ign
+            if self.bank_account_type_of_bank_account_doesnt_exist != ign:
+                self.bank_account_type_of_bank_account_doesnt_exist = ign
+            if self.default_bank_account_type_of_bank_account:
+                self.default_bank_account_type_of_bank_account = None
+            if self._clean_bank_account_type:
+                self.clean_bank_account_type_dt = 0
+        
+        elif (
+            (
+                self.bank_account_type_of_bank_account_is_empty != ign or
+                self.bank_account_type_of_bank_account_doesnt_exist not in (ign, "Add Bank Account Type")
+            ) and not self.default_bank_account_type_of_bank_account
+        ):
+            from erpnext_gocardless_bank.libs import add_account_type
+            
+            name = add_account_type("Gocardless Bank Account")
+            if name:
+                self.default_bank_account_type_of_bank_account = name
+            else:
+                self._add_error(_("Unable to create default bank account type \"Gocardless Bank Account\"."))
+        
         if self.supplier_exist_in_transaction == ign:
             if self.supplier_in_transaction_doesnt_exist != ign:
                 self.supplier_in_transaction_doesnt_exist = ign
@@ -92,6 +121,12 @@ class GocardlessSettings(Document):
         if self._clean_bank and not self._clean_bank_account:
             self.clean_bank_account_dt = 1
         
+        if (
+            self._clean_bank_account and not self._clean_bank_account_type and
+            self.bank_account_type_exist_for_bank_account != ign
+        ):
+            self.clean_bank_account_type_dt = 1
+        
         if self._clean_bank_account and not self._clean_bank_transaction:
             self.clean_bank_transaction_dt = 1
         
@@ -105,7 +140,8 @@ class GocardlessSettings(Document):
         if (
             self._clean_supplier and (
                 self.supplier_exist_in_transaction == ign or
-                self.supplier_in_transaction_doesnt_exist == ign
+                self.supplier_in_transaction_doesnt_exist == ign or
+                not self._clean_bank_transaction
             )
         ):
             self.clean_supplier_dt = 0
@@ -113,7 +149,8 @@ class GocardlessSettings(Document):
         if (
             self._clean_customer and (
                 self.customer_exist_in_transaction == ign or
-                self.customer_in_transaction_doesnt_exist == ign
+                self.customer_in_transaction_doesnt_exist == ign or
+                not self._clean_bank_transaction
             )
         ):
             self.clean_customer_dt = 0

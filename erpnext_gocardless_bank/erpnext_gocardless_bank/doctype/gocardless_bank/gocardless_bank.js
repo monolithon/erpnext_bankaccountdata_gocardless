@@ -430,6 +430,7 @@ frappe.gc_accounts = {
             try {
                 this._dialog.modal_body.off('click', 'button.gc-new-account', this._dialog.gc.on_new_click);
                 this._dialog.modal_body.off('click', 'button.gc-link-account', this._dialog.gc.on_link_click);
+                delete this._dialog.gc;
             } catch(_) {}
             try { this._dialog.$wrapper.modal('dispose'); } catch(_) {}
             try { this._dialog.wrapper.remove(); } catch(_) {}
@@ -911,6 +912,13 @@ frappe.gc_accounts = {
                 $el: null,
                 $spinner: null,
                 account: null,
+                on_click: 0,
+                reset: frappe.gc().$fn(function() {
+                    this._dialog.gc.$el = null;
+                    this._dialog.gc.$spinner = null;
+                    this._dialog.gc.account = null;
+                    this._dialog.gc.on_click = 0;
+                }, this),
                 hide_spinner: frappe.gc().$fn(function(disable) {
                     this._dialog.gc.$spinner && this._remove_spinner(
                         !disable ? this._dialog.gc.$el : null,
@@ -930,11 +938,11 @@ frappe.gc_accounts = {
                         for (let i = 0, l = this._accounts.length, r, a; i < l; i++) {
                             r = this._accounts[i];
                             if (this._linked.includes(r.name)) a = '<span class="text-success">' + __('Linked') + '</span>';
-                            else a = '<button type="button" class="btn btn-primary btn-sm gc-link-account" data-bank-account="{name}">' + __('Link') + '</button>';
+                            else a = '<button type="button" class="btn btn-primary btn-sm gc-link-account" data-bank-account="' + r.name + '">' + __('Link') + '</button>';
                             this._dialog.gc.$body.append(
                                 this._dialog.gc.tpl.def
                                     .replace('{account_name}', r.account_name)
-                                    .replace('{account_link}', a.replace('{name}', r.name))
+                                    .replace('{account_link}', a)
                             );
                         }
                     } else {
@@ -944,6 +952,7 @@ frappe.gc_accounts = {
                     this._dialog.gc.$cont.show();
                 }, this),
                 on_new_click: frappe.gc().$fn(function(e) {
+                    this._dialog.gc.on_click = 1;
                     this._dialog.hide();
                     var me = this;
                     frappe.gc().request(
@@ -955,28 +964,35 @@ frappe.gc_accounts = {
                         function(res) {
                             if (!res) {
                                 me._dialog.gc.hide_spinner(true);
-                                frappe.gc()._error('Accounts: storing bank account failed');
+                                this._error('Accounts: storing bank account error.', me._dialog.gc.account);
+                                this.error_(__('Unable to add Gocardless bank account "{0}".', [me._dialog.gc.account]));
+                                me._dialog.gc.reset();
                                 return;
                             }
                             me._dialog.gc.hide_spinner();
-                            frappe.gc()._log('Accounts: storing bank account success');
-                            frappe.gc().success_(__('The Gocardless bank account "{0}" has been added successfully', [me._dialog.gc.account]));
+                            this._log('Accounts: storing bank account success.', me._dialog.gc.account);
+                            this.success_(__('Gocardless bank account "{0}" has been added successfully.', [me._dialog.gc.account]));
+                            me._dialog.gc.reset();
                             me._frm._bank.inits.reload = 1;
                             me._frm.reload_doc();
                         },
                         function() {
                             me._dialog.gc.hide_spinner();
-                            frappe.gc()._error('Accounts: storing bank account error');
-                            frappe.gc().error(__('Unable to add the Gocardless bank account "{0}" for the bank "{1}".', [me._dialog.gc.account, cstr(me._frm.docname)]));
+                            this._error('Accounts: storing bank account failed.', me._dialog.gc.account);
+                            this.error_(__('Unable to add Gocardless bank account "{0}".', [me._dialog.gc.account]));
+                            me._dialog.gc.reset();
                         }
                     );
                 }, this),
                 on_link_click: frappe.gc().$fn(function(e) {
+                    this._dialog.gc.on_click = 1;
                     this._dialog.hide();
                     var acc_name = $(e.target).attr('data-bank-account');
                     if (!frappe.gc().$isStrVal(acc_name)) {
                         this._dialog.gc.hide_spinner(true);
-                        frappe.gc()._log('Accounts: unable to get the bank account name');
+                        frappe.gc()._error('Accounts: unable to get the bank account name.', this._dialog.gc.account, acc_name);
+                        frappe.gc().error_(__('Unable to get selected bank account name.'));
+                        this._dialog.gc.reset();
                         return;
                     }
                     var me = this;
@@ -990,19 +1006,23 @@ frappe.gc_accounts = {
                         function(res) {
                             if (!res) {
                                 me._dialog.gc.hide_spinner(true);
-                                this._error('Accounts: linking bank account failed');
+                                this._error('Accounts: linking bank account failed.', me._dialog.gc.account, acc_name);
+                                this.error_(__('Unable to link Gocardless bank account "{0}" to bank account "{1}".', [me._dialog.gc.account, acc_name]));
+                                me._dialog.gc.reset();
                                 return;
                             }
                             me._dialog.gc.hide_spinner();
-                            this._log('Accounts: linking bank account success');
-                            this.success_(__('The bank account "{0}" has been linked successfully', [acc_name]));
+                            this._log('Accounts: linking bank account success.', me._dialog.gc.account, acc_name);
+                            this.success_(__('Gocardless bank account "{0}" has been linked successfully to bank account "{1}".', [me._dialog.gc.account, acc_name]));
+                            me._dialog.gc.reset();
                             me._frm._bank.inits.reload = 1;
                             me._frm.reload_doc();
                         },
                         function(e) {
                             me._dialog.gc.hide_spinner();
-                            this._error('Accounts: linking bank account error');
-                            this.error(__('Unable to link the bank account "{0}".', [acc_name]));
+                            this._error('Accounts: linking bank account error.', me._dialog.gc.account, acc_name);
+                            this.error_(__('Unable to link Gocardless bank account "{0}" to bank account "{1}".', [me._dialog.gc.account, acc_name]));
+                            me._dialog.gc.reset();
                         }
                     );
                 }, this),
@@ -1013,14 +1033,13 @@ frappe.gc_accounts = {
             this._dialog.set_secondary_action_label(__('Cancel'));
             this._dialog.set_secondary_action(frappe.gc().$fn(function() {
                 this._dialog.hide();
-                this._dialog.gc.hide_spinner();
             }, this));
             this._dialog.$wrapper.on('hidden.bs.modal', frappe.gc().$fn(function() {
                 this._dialog.gc.$cont.hide();
                 this._dialog.gc.$loading.show();
+                if (this._dialog.gc.on_click) return;
                 this._dialog.gc.hide_spinner();
-                this._dialog.gc.$el = null;
-                this._dialog.gc.account = null;
+                this._dialog.gc.reset();
             }, this));
         }
         this._dialog.gc.$el = $el;

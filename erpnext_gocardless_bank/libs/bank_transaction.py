@@ -135,7 +135,7 @@ def enqueue_bank_transactions_sync(bank, account, from_dt=None, to_dt=None):
     for i in range(len(dates)):
         dt = dates.pop(0)
         queue_bank_transactions_sync(
-            settings, client, doc.name, doc.bank, "Manual",
+            settings, client, doc.name, doc.bank, doc.company, "Manual",
             data["row_name"], data["account"], data["account_id"],
             data["account_currency"], data["bank_account_ref"],
             dt[0], dt[1], dt[2]
@@ -199,7 +199,7 @@ def get_dates_list(from_dt, to_dt=None):
 
 # [Schedule, Internal]
 def queue_bank_transactions_sync(
-    settings, client, bank, account_bank, trigger, row_name,
+    settings, client, bank, account_bank, company, trigger, row_name,
     account, account_id, account_currency, bank_account_ref,
     from_dt, to_dt=None, dt_diff=1
 ):
@@ -220,6 +220,7 @@ def queue_bank_transactions_sync(
             sync_id=unique_key(),
             bank=bank,
             account_bank=account_bank,
+            company=company,
             trigger=trigger,
             row_name=row_name,
             account=account,
@@ -233,7 +234,7 @@ def queue_bank_transactions_sync(
 
 # [Internal]
 def sync_bank_transactions(
-    settings, client, sync_id, bank, account_bank, trigger, row_name,
+    settings, client, sync_id, bank, account_bank, company, trigger, row_name,
     account, account_id, account_currency, bank_account_ref, from_dt, to_dt=None
 ):
     transactions = client.get_account_transactions(account_id, from_dt, to_dt)
@@ -263,7 +264,7 @@ def sync_bank_transactions(
                     })
                     
                     add_transactions(
-                        result, settings, sync_id, bank, account_bank,
+                        result, settings, sync_id, bank, account_bank, company,
                         trigger, account, account_currency, bank_account_ref, k,
                         client.prepare_entries(transactions.pop(k))
                     )
@@ -304,20 +305,20 @@ def sync_bank_transactions(
 
 # [Internal]
 def add_transactions(
-    result, settings, sync_id, bank, account_bank, trigger,
+    result, settings, sync_id, bank, account_bank, company, trigger,
     account, account_currency, bank_account_ref, status, transactions
 ):
     result.synced = True
     for i in range(len(transactions)):
         new_bank_transaction(
-            result, settings, account_bank, account, account_currency,
-            bank_account_ref, transactions.pop(0), status
+            result, settings, company, account_bank, account,
+            account_currency, bank_account_ref, transactions.pop(0), status
         )
 
 
 # [Internal]
 def new_bank_transaction(
-    result, settings, account_bank, account,
+    result, settings, company, account_bank, account,
     account_currency, bank_account_ref, data, status
 ):
     from .datetime import today_datetime
@@ -438,7 +439,7 @@ def new_bank_transaction(
         from .datetime import reformat_date
         
         try:
-            entry_data = frappe._dict({
+            entry_data = {
                 "date": reformat_date(data["date"]),
                 "status": status,
                 "bank_account": bank_account_ref,
@@ -450,10 +451,10 @@ def new_bank_transaction(
                 "reference_number": data.get("reference_number", ""),
                 "transaction_id": data["transaction_id"],
                 "from_gocardless": 1
-            })
+            }
             
-            handle_transaction_supplier(settings, entry_data, account_bank, data)
-            handle_transaction_customer(settings, entry_data, account_bank, data)
+            handle_transaction_supplier(settings, company, entry_data, account_bank, data)
+            handle_transaction_customer(settings, company, entry_data, account_bank, data)
             
             doc = (frappe.new_doc(dt)
                 .update(entry_data)
@@ -475,12 +476,13 @@ def new_bank_transaction(
 
 
 # [Internal]
-def handle_transaction_supplier(settings, entry, account_bank, data):
+def handle_transaction_supplier(settings, company, entry, account_bank, data):
     if (
         settings.supplier_exist_in_transaction == "Ignore" or
-        "supplier" not in data or
-        not data["supplier"] or
-        "name" not in data["supplier"]
+        not data.get("supplier", "") or
+        not isinstance(data["supplier"], dict) or
+        not data["supplier"].get("name", "") or
+        not isinstance(data["supplier"]["name"], str)
     ):
         return 0
     
@@ -505,8 +507,8 @@ def handle_transaction_supplier(settings, entry, account_bank, data):
                     "from_gocardless": 1
                 })
                 .insert(ignore_permissions=True, ignore_mandatory=True))
-            entry.party_type = dt
-            entry.party = doc.name
+            entry["party_type"] = dt
+            entry["party"] = doc.name
             
             clear_doc_cache(dt)
         except Exception as exc:
@@ -518,45 +520,53 @@ def handle_transaction_supplier(settings, entry, account_bank, data):
             ignore_supplier = True
     
     else:
-        entry.party_type = dt
-        entry.party = frappe.db.get_value(dt, {"supplier_name": name}, "name")
-        if isinstance(entry.party, list):
-            entry.party = entry.party.pop()
+        entry["party_type"] = dt
+        entry["party"] = frappe.db.get_value(dt, {"supplier_name": name}, "name")
+        if isinstance(entry["party"], list):
+            entry["party"] = entry["party"].pop(0) if entry["party"] else ""
     
     if (
         ignore_supplier or
         settings.supplier_bank_account_exist_in_transaction == "Ignore" or
-         "account" not in data["supplier"] or
-         not data["supplier"]["account"]
+        not data["supplier"].get("account", "") or
+        not isinstance(data["supplier"]["account"], str)
     ):
         return 0
     
     from .bank_account import add_party_bank_account
     
-    acc_name = add_party_bank_account(name, dt, account_bank, data["supplier"]["account"])
-    if not acc_name or not entry.party:
+    acc_name = add_party_bank_account(
+        name, dt, account_bank, company,
+        data["supplier"]["account"],
+        data["supplier"].get("account_no", ""),
+        data["supplier"].get("iban", "")
+    )
+    if not acc_name or not entry["party"]:
         return 0
     
     from .cache import clear_doc_cache
     
+    frappe.flags.from_gocardless_update = 1
     frappe.db.set_value(
         dt,
-        entry.party,
+        entry["party"],
         "default_bank_account",
         acc_name
     )
+    frappe.flags.pop("from_gocardless_update", 0)
     clear_doc_cache(dt)
 
 
 # [Internal]
-def handle_transaction_customer(settings, entry, account_bank, data):
+def handle_transaction_customer(settings, company, entry, account_bank, data):
     if (
         settings.customer_exist_in_transaction == "Ignore" or
-        entry.party_type or
-        entry.party or
-        "customer" not in data or
-        not data["customer"] or
-        "name" not in data["customer"]
+        entry.get("party_type", "") or
+        entry.get("party", "") or
+        not data.get("customer", "") or
+        not isinstance(data["customer"], dict) or
+        not data["customer"].get("name", "") or
+        not isinstance(data["customer"]["name"], str)
     ):
         return 0
     
@@ -583,8 +593,8 @@ def handle_transaction_customer(settings, entry, account_bank, data):
                     "from_gocardless": 1
                 })
                 .insert(ignore_permissions=True, ignore_mandatory=True))
-            entry.party_type = dt
-            entry.party = doc.name
+            entry["party_type"] = dt
+            entry["party"] = doc.name
             
             clear_doc_cache(dt)
         except Exception as exc:
@@ -595,33 +605,40 @@ def handle_transaction_customer(settings, entry, account_bank, data):
             })
             ignore_customer = True
     else:
-        entry.party_type = dt
-        entry.party = frappe.db.get_value(dt, {"customer_name": name}, "name")
-        if isinstance(entry.party, list):
-            entry.party = entry.party.pop()
+        entry["party_type"] = dt
+        entry["party"] = frappe.db.get_value(dt, {"customer_name": name}, "name")
+        if isinstance(entry["party"], list):
+            entry["party"] = entry["party"].pop(0) if entry["party"] else ""
     
     if (
         ignore_customer or
         settings.customer_bank_account_exist_in_transaction == "Ignore" or
-         "account" not in data["customer"] or
-         not data["customer"]["account"]
+        not data["customer"].get("account", "") or
+        not isinstance(data["customer"]["account"], str)
     ):
         return 0
     
     from .bank_account import add_party_bank_account
     
-    acc_name = add_party_bank_account(name, dt, account_bank, data["customer"]["account"])
-    if not acc_name or not entry.party:
+    acc_name = add_party_bank_account(
+        name, dt, account_bank, company,
+        data["customer"]["account"],
+        data["customer"].get("account_no", ""),
+        data["customer"].get("iban", "")
+    )
+    if not acc_name or not entry["party"]:
         return 0
     
     from .cache import clear_doc_cache
     
+    frappe.flags.from_gocardless_update = 1
     frappe.db.set_value(
         dt,
-        entry.party,
+        entry["party"],
         "default_bank_account",
         acc_name
     )
+    frappe.flags.pop("from_gocardless_update", 0)
     clear_doc_cache(dt)
 
 

@@ -726,7 +726,8 @@
                         if (LUF.is_table(c)) LUT.toggle(f, c.df.fieldname, 0, 0, 1);
                         else if (LUF.is_field(c)) LUC.toggle(f, c.df.fieldname, 0, null, 0, 0, 1);
                     }
-                LUF.has_flow(f) ? f.page.hide_actions_menu() : f.disable_save();
+                if (!o.ignore.length)
+                    LUF.has_flow(f) ? f.page.hide_actions_menu() : f.disable_save();
                 if (o.message) f.set_intro(o.message, o.color || 'red');
             } catch(e) { this._error('Disable form', e.message, e.stack); }
             finally {

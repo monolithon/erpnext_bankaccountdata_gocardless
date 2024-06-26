@@ -173,7 +173,7 @@ def sync_bank(settings, name, today, trigger):
         for i in range(len(dates)):
             dt = dates.pop(0)
             queue_bank_transactions_sync(
-                settings, client, doc.name, doc.bank, trigger,
+                settings, client, doc.name, doc.bank, doc.company, trigger,
                 row["row_name"], row["account"], row["account_id"],
                 row["account_currency"], row["bank_account_ref"],
                 dt[0], dt[1], dt[2]
@@ -185,7 +185,7 @@ def update_bank_accounts_status():
     dt = "Gocardless Bank"
     banks = frappe.get_all(
         dt,
-        fields=["name", "company"],
+        fields=["name", "bank", "company"],
         filters=[
             [dt, "auth_id", "!=", ""],
             [dt, "auth_status", "=", "Linked"]
@@ -196,7 +196,7 @@ def update_bank_accounts_status():
     if not banks or not isinstance(banks, list):
         return 0
     
-    banks = {v["name"]:v["company"] for v in banks}
+    banks = {v["name"]:v for v in banks}
     
     adt = f"{dt} Account"
     accounts = frappe.get_all(
@@ -226,13 +226,15 @@ def update_bank_accounts_status():
     
     settings = settings()
     clients = {}
-    for v in accounts:
+    updated = {}
+    for i in range(len(accounts)):
+        v = accounts.pop(0)
         p = v["parent"]
         if p not in banks:
             continue
         
         if p not in clients:
-            client = get_client(banks[p], settings)
+            client = get_client(banks[p]["company"], settings)
             if isinstance(client, dict):
                 continue
             
@@ -247,6 +249,7 @@ def update_bank_accounts_status():
         
         try:
             update_bank_account_data(v["name"], {"status": data["status"]})
+            updated[p] = banks[p]["bank"]
         except Exception as exc:
             _store_error({
                 "error": "Unable to update bank account status",
@@ -254,6 +257,19 @@ def update_bank_accounts_status():
                 "data": data,
                 "exception": str(exc)
             })
+    
+    banks.clear()
+    clients.clear()
+    if updated:
+        from .realtime import emit_reload_bank_accounts
+        
+        for p in updated:
+            emit_reload_bank_accounts({
+                "name": p,
+                "bank": updated[p]
+            })
+        
+        updated.clear()
 
 
 # [Internal]

@@ -9,6 +9,8 @@ import frappe
 
 # [Hooks, Install]
 def after_uninstall():
+    frappe.flags.from_gocardless_trash = 1
+    
     dt = "Workspace"
     name = "ERPNext Integrations"
     if frappe.db.exists(dt, name):
@@ -45,6 +47,7 @@ def after_uninstall():
             except Exception:
                 pass
     
+    frappe.flags.pop("from_gocardless_trash", 0)
     frappe.clear_cache()
 
 

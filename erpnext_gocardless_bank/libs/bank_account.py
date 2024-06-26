@@ -32,50 +32,48 @@ def store_bank_account(name, account):
         return 0
     
     row = None
-    data = None
     for v in doc.bank_accounts:
         if v.account == account and not v.get("bank_account_ref", ""):
             row = v
-            data = {
-                "account": v.account,
-                "account_id": v.account_id,
-                "account_type": v.account_type,
-                "account_no": v.account_no,
-                "iban": v.iban,
-                "is_default": 0
-            }
             break
     
-    if not data:
+    if not row:
         _emit_error({
             "name": name,
             "error": _("Bank account \"{0}\" is not part of Gocardless bank \"{1}\".").format(account, name),
         })
         return 0
     
-    if not frappe.db.exists("Bank Account", {
-        "bank": doc.bank_ref,
-        "company": doc.company,
-        "is_default": 1
-    }):
-        data["is_default"] = 1
-    
-    update = 0
-    if data["account_type"]:
-        from .bank_account_type import add_account_type
-        
-        account_type = add_account_type(data["account_type"])
-        if not account_type:
-            _emit_error({
-                "name": name,
-                "error": _("ERPNext: Unable to create bank account type \"{0}\" for bank account \"{1}\".").format(data["account_type"], data["account"])
-            })
-            return 0
-        
-        if not row.bank_account_type_ref:
-            update = 1
+    data = {
+        "account": row.account,
+        "account_type": row.account_type,
+        "account_no": row.account_no,
+        "iban": row.iban,
+        "is_default": 0
+    }
+    if row.account_type:
+        if row.bank_account_type_ref:
+            data["account_type"] = row.bank_account_type_ref
+        else:
+            from .bank_account_type import add_account_type
+            
+            account_type = add_account_type(row.account_type)
+            if not account_type:
+                _emit_error({
+                    "name": name,
+                    "error": _("ERPNext: Unable to create bank account type \"{0}\" for bank account \"{1}\".").format(row.account_type, row.account)
+                })
+                return 0
+            
             row.bank_account_type_ref = account_type
             data["account_type"] = account_type
+    
+    bank_account = add_bank_account(doc, data)
+    if not bank_account:
+        return 0
+    
+    row.bank_account_ref = bank_account
+    doc.save(ignore_permissions=True)
     
     from .currency import get_currency_status
     
@@ -89,15 +87,7 @@ def store_bank_account(name, account):
         
         enqueue_enable_currencies([row.account_currency])
     
-    bank_account = add_bank_account(doc, data)
-    if bank_account and not row.bank_account_ref:
-        row.bank_account_ref = bank_account
-        update = 1
-    
-    if update:
-        doc.save(ignore_permissions=True)
-    
-    return 1 if bank_account else 0
+    return 1
 
 
 # [G Bank Form]
@@ -270,9 +260,10 @@ def get_client_bank_accounts(company, bank, auth_id):
 
 # [Internal]
 def prepare_bank_accounts(accounts, bank, company):
-    from .system import settings
+    from .bank_account_type import account_type_exist
     from .company import get_company_currency
     from .currency import get_currencies_with_status
+    from .system import settings
     
     doc = settings()
     company_currency = get_company_currency(company)
@@ -296,6 +287,21 @@ def prepare_bank_accounts(accounts, bank, company):
         elif not currencies[v["currency"]]:
             if doc.bank_account_currency_disabled == skip:
                 continue
+        
+        if not v.get("cashAccountType", ""):
+            if (
+                doc.bank_account_type_exist_for_bank_account != skip and
+                doc.bank_account_type_of_bank_account_is_empty != skip
+            ):
+                v["cashAccountType"] = doc.default_bank_account_type_of_bank_account
+        else:
+            if doc.bank_account_type_exist_for_bank_account == skip:
+                v["cashAccountType"] = ""
+            elif not account_type_exist(v["cashAccountType"]):
+                if doc.bank_account_type_of_bank_account_doesnt_exist == skip:
+                    v["cashAccountType"] = ""
+                elif doc.bank_account_type_of_bank_account_doesnt_exist != "Add Bank Account Type":
+                    v["cashAccountType"] = doc.default_bank_account_type_of_bank_account
         
         ret = make_account_name(v, exist, idx)
         idx = ret[1]
@@ -379,22 +385,25 @@ def add_bank_account(doc, data):
     err = None
     dt = "Bank Account"
     account_name = "{0} - {1}".format(data["account"], doc.bank)
-    account = {
-        "account_name": data["account"],
+    account = data.copy()
+    account["account_name"] = account.pop("account")
+    account["gocardless_bank_account_no"] = account.pop("account_no")
+    account.update({
         "bank": doc.bank,
-        "account_type": data["account_type"],
-        "gocardless_bank_account_no": data["account_no"],
         "company": doc.company,
-        "iban": data["iban"]
-    }
+        "from_gocardless": 1
+    })
+    if not frappe.db.exists("Bank Account", {
+        "bank": doc.bank_ref,
+        "company": doc.company,
+        "is_default": 1
+    }):
+        account["is_default"] = 1
+    
     if not frappe.db.exists(dt, account_name):
         try:
             (frappe.new_doc(dt)
                 .update(account)
-                .update({
-                    "is_default": data["is_default"],
-                    "from_gocardless": 1
-                })
                 .insert(ignore_permissions=True, ignore_mandatory=True))
         except frappe.UniqueValidationError:
             err = _("ERPNext: Bank account \"{0}\" of bank \"{1}\" already exists.").format(data["account"], doc.bank)
@@ -410,6 +419,8 @@ def add_bank_account(doc, data):
             })
     
     else:
+        frappe.flags.from_gocardless_update = 1
+        
         try:
             (frappe.get_doc(dt, account_name)
                 .update(account)
@@ -424,6 +435,8 @@ def add_bank_account(doc, data):
                 "data": data,
                 "exception": str(exc)
             })
+        
+        frappe.flags.pop("from_gocardless_update", 0)
     
     if not err:
         from .cache import clear_doc_cache
@@ -494,24 +507,26 @@ def update_bank_account_data(name, data):
 
 
 # [Bank Transaction]
-def add_party_bank_account(party, party_type, account_bank, account):
+def add_party_bank_account(party, party_type, account_bank, company, account, account_no, iban):
     dt = "Bank Account"
     bank_acc_name = "{0} - {1}".format(party, account_bank)
-    iban = account
-    if iban and not is_valid_IBAN(iban):
+    if not iban or not is_valid_IBAN(iban):
         iban = ""
     
+    data = {
+        "account_name": party,
+        "gocardless_bank_account_no": account_no,
+        "bank": account_bank,
+        "company": company,
+        "iban": iban,
+        "party_type": party_type,
+        "party": party,
+        "from_gocardless": 1
+    }
     if not frappe.db.exists(dt, bank_acc_name):
         try:
             (frappe.new_doc(dt)
-                .update({
-                    "account_name": party,
-                    "bank": account_bank,
-                    "iban": iban,
-                    "party_type": party_type,
-                    "party": party,
-                    "from_gocardless": 1
-                })
+                .update(data)
                 .insert(ignore_permissions=True, ignore_mandatory=True))
             
             from .cache import clear_doc_cache
@@ -524,28 +539,39 @@ def add_party_bank_account(party, party_type, account_bank, account):
                 "party": party,
                 "party_type": party_type,
                 "account_bank": account_bank,
+                "company": company,
                 "account": account,
+                "account_no": account_no,
+                "iban": iban,
                 "exception": str(exc)
             })
     else:
+        frappe.flags.from_gocardless_update = 1
+        
         try:
-            frappe.db.set_value(dt, bank_acc_name, {
-                "iban": iban,
-                "party_type": party_type,
-                "party": party,
-            })
+            data.pop("account_name")
+            (frappe.get_doc(dt, bank_acc_name)
+                .update(data)
+                .save(ignore_permissions=True))
             
             from .cache import clear_doc_cache
-    
+            
             clear_doc_cache(dt)
+            frappe.flags.pop("from_gocardless_update", 0)
+            
             return bank_acc_name
         except Exception as exc:
+            frappe.flags.pop("from_gocardless_update", 0)
+            
             _store_error({
                 "error": "Unable to update party bank account.",
                 "party": party,
                 "party_type": party_type,
                 "account_bank": account_bank,
+                "company": company,
                 "account": account,
+                "account_no": account_no,
+                "iban": iban,
                 "exception": str(exc)
             })
     

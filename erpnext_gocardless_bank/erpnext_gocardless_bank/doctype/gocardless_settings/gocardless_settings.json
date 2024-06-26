@@ -13,6 +13,12 @@
   "bank_account_currency_doesnt_exist",
   "bank_account_column",
   "bank_account_currency_disabled",
+  "bank_account_type_section",
+  "bank_account_type_exist_for_bank_account",
+  "bank_account_type_of_bank_account_is_empty",
+  "bank_account_type_column",
+  "bank_account_type_of_bank_account_doesnt_exist",
+  "default_bank_account_type_of_bank_account",
   "bank_transaction_section",
   "bank_transaction_without_id",
   "bank_transaction_without_date",
@@ -37,6 +43,7 @@
   "bank_remove_section",
   "clean_bank_dt",
   "clean_bank_account_dt",
+  "clean_bank_account_type_dt",
   "clean_bank_transaction_dt",
   "bank_remove_column",
   "clean_currency_dt",
@@ -98,6 +105,44 @@
    "fieldtype": "Select",
    "label": "Bank Account Currency Is Disabled",
    "options": "Ignore\nEnable Currency"
+  },
+  {
+   "fieldname": "bank_account_type_section",
+   "fieldtype": "Section Break",
+   "label": "Bank Account Type Settings",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "bank_account_type_exist_for_bank_account",
+   "fieldtype": "Select",
+   "label": "Bank Account Type Exist For Bank Account",
+   "options": "Ignore\nProcess"
+  },
+  {
+   "fieldname": "bank_account_type_of_bank_account_is_empty",
+   "fieldtype": "Select",
+   "label": "Bank Account Type of Bank Account Is Empty",
+   "options": "Ignore\nUse Default Bank Account Type",
+   "read_only_depends_on": "eval:doc.bank_account_type_exist_for_bank_account === 'Ignore'"
+  },
+  {
+   "fieldname": "bank_account_type_column",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_account_type_of_bank_account_doesnt_exist",
+   "fieldtype": "Select",
+   "label": "Bank Account Type of Bank Account Doesn't Exist",
+   "options": "Ignore\nAdd Bank Account Type\nUse Default Bank Account Type",
+   "read_only_depends_on": "eval:doc.bank_account_type_exist_for_bank_account === 'Ignore'"
+  },
+  {
+   "fieldname": "default_bank_account_type_of_bank_account",
+   "fieldtype": "Link",
+   "label": "Default Bank Account Type of Bank Account",
+   "options": "Bank Account Type",
+   "read_only_depends_on": "eval:doc.bank_account_type_exist_for_bank_account === 'Ignore' || (doc.bank_account_type_of_bank_account_is_empty === 'Ignore' && ['Ignore', 'Add Bank Account Type'].indexOf(doc.bank_account_type_of_bank_account_doesnt_exist) >= 0)",
+   "mandatory_depends_on": "eval:doc.bank_account_without_type !== 'Ignore' && (doc.bank_account_type_of_bank_account_is_empty !== 'Ignore' || ['Ignore', 'Add Bank Account Type'].indexOf(doc.bank_account_type_of_bank_account_doesnt_exist) < 0)"
   },
   {
    "fieldname": "bank_transaction_section",
@@ -248,6 +293,12 @@
    "read_only_depends_on": "eval:doc.clean_bank_dt"
   },
   {
+   "fieldname": "clean_bank_account_type_dt",
+   "fieldtype": "Check",
+   "label": "Clean Bank Account Type Doctype",
+   "read_only_depends_on": "eval:doc.clean_bank_dt || doc.clean_bank_account_dt || doc.bank_account_type_exist_for_bank_account === 'Ignore'"
+  },
+  {
    "fieldname": "clean_bank_transaction_dt",
    "fieldtype": "Check",
    "label": "Clean Bank Transaction Doctype",
@@ -267,13 +318,13 @@
    "fieldname": "clean_supplier_dt",
    "fieldtype": "Check",
    "label": "Clean Supplier Doctype",
-   "read_only_depends_on": "eval:doc.supplier_exist_in_transaction === 'Ignore' || doc.supplier_in_transaction_doesnt_exist === 'Ignore'"
+   "read_only_depends_on": "eval:doc.supplier_exist_in_transaction === 'Ignore' || doc.supplier_in_transaction_doesnt_exist === 'Ignore' || !doc.clean_bank_transaction_dt"
   },
   {
    "fieldname": "clean_customer_dt",
    "fieldtype": "Check",
    "label": "Clean Customer Doctype",
-   "read_only_depends_on": "eval:doc.customer_exist_in_transaction === 'Ignore' || doc.customer_in_transaction_doesnt_exist === 'Ignore'"
+   "read_only_depends_on": "eval:doc.customer_exist_in_transaction === 'Ignore' || doc.customer_in_transaction_doesnt_exist === 'Ignore' || !doc.clean_bank_transaction_dt"
   },
   {
    "fieldname": "logs_section",
@@ -292,7 +343,7 @@
  ],
  "icon": "fa fa-cog",
  "issingle": 1,
- "modified": "2024-06-10 04:04:04",
+ "modified": "2024-06-26 04:04:04",
  "modified_by": "Administrator",
  "module": "ERPNext Gocardless Bank",
  "name": "Gocardless Settings",

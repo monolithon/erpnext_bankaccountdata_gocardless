@@ -139,6 +139,13 @@ class Api:
             "debtorAccount",
             "ultimateDebtor"
         ],
+        "account_info": {
+            "iban": "iban",
+            "bban": "account",
+            "pan": "account_no",
+            "maskedPan": "account_no",
+            "currency": "currency"
+        },
         "keys": {
             "bookingDate": "Booking Date",
             "bookingDateTime": "Booking DateTime",
@@ -224,13 +231,21 @@ class Api:
                         entry[ek] = {}
                     
                     nk = k[8:].lower()
-                    entry[ek][nk] = val
-                    
-                    if isinstance(val, dict):
-                        if val:
+                    if not isinstance(val, dict):
+                        entry[ek][nk] = val
+                    elif val:
+                        cnt = 0
+                        for x in Api.transactions["account_info"]:
+                            z = Api.transactions["account_info"][x]
+                            if not entry[ek].get(z, ""):
+                                entry[ek][z] = val.get(x, "")
+                            if entry[ek].get(z, ""):
+                                cnt = 1
+                        
+                        if not cnt:
                             entry[ek][nk] = next(iter(val.values()))
-                        else:
-                            del entry[ek][nk]
+                        if not entry[ek].get("account", "") and entry[ek].get("iban", ""):
+                            entry[ek]["account"] = entry[ek]["iban"]
                     
                     continue
                 
@@ -241,13 +256,21 @@ class Api:
                         entry[ek] = {}
                     
                     nk = k[6:].lower()
-                    entry[ek][nk] = val
-                    
-                    if isinstance(val, dict):
-                        if val:
+                    if not isinstance(val, dict):
+                        entry[ek][nk] = val
+                    elif val:
+                        cnt = 0
+                        for x in Api.transactions["account_info"]:
+                            z = Api.transactions["account_info"][x]
+                            if not entry[ek].get(z, ""):
+                                entry[ek][z] = val.get(x, "")
+                            if entry[ek].get(z, ""):
+                                cnt = 1
+                        
+                        if not cnt:
                             entry[ek][nk] = next(iter(val.values()))
-                        else:
-                            del entry[ek][nk]
+                        if not entry[ek].get("account", "") and entry[ek].get("iban", ""):
+                            entry[ek]["account"] = entry[ek]["iban"]
             
             entry["information"] = to_json(info, "", True)
         

@@ -20,6 +20,7 @@ from .bank_account import (
     get_bank_accounts_list,
     get_bank_account_data
 )
+from .bank_account_type import add_account_type
 from .bank_transaction import enqueue_bank_transactions_sync
 from .cache import clear_doc_cache
 from .clean import enqueue_bank_trash

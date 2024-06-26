@@ -7,13 +7,13 @@
 import frappe
 
 
-# [Bank Account]
+# [G Bank, Bank Account]
 def add_account_type(name):
-    dt = "Bank Account Type"
-    if frappe.db.exists(dt, name):
+    if account_type_exist(name):
         return name
     
     try:
+        dt = "Bank Account Type"
         (frappe.new_doc(dt)
             .update({
                 "account_type": name,
@@ -37,3 +37,11 @@ def add_account_type(name):
         })
         log_error(_("Unable to create bank account type \"{0}\".").format(name))
         return None
+
+
+# [Bank Account, Internal]
+def account_type_exist(name):
+    if frappe.db.exists("Bank Account Type", name):
+        return True
+    
+    return False

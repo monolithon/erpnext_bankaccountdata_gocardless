@@ -17,7 +17,7 @@ def emit_bank_error(data=None):
     emit_event("gocardless_bank_error", data)
 
 
-# [Bank Account]
+# [Bank, Schedule]
 def emit_reload_bank_accounts(data=None):
     emit_event("gocardless_reload_bank_accounts", data)
 

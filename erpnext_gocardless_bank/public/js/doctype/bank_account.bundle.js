@@ -29,12 +29,25 @@ frappe.ui.form.on('Bank Account', {
                 })
                 .on('change', function() {
                     if (!cint(frm.doc.from_gocardless)) return;
-                    if (frm._gc) frm.events.gc_load_toolbar(frm, !this.is_enabled);
+                    if (frm._gc) frm.events.gc_load_toolbar(frm, !this.is_enabled || !frm._gc.ready);
                 });
         }
         gc_init();
     },
     gc_get_data: function(frm) {
+        var ignore = frappe.gc().$filter(frm.meta.fields, function(v) {
+            return ![
+                'account_name',
+                'gocardless_bank_account_no',
+                'account_type',
+                'iban',
+                'bank',
+                'company',
+                'party_type',
+                'party',
+                'from_gocardless'
+            ].includes(v.fieldname);
+        });
         frappe.gc().request(
             'get_bank_account_data',
             {account: cstr(frm.docname)},
@@ -44,27 +57,29 @@ frappe.ui.form.on('Bank Account', {
                     || !this.$isStrVal(ret.bank_account)
                     || !this.$isStrVal(ret.status)
                 ) {
-                    this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'blue'});
+                    this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'blue', ignore: ignore});
                     return this._error('Bank account data received is invalid.');
                 }
                 if (ret.bank_account !== frm.docname) {
-                    this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'blue'});
+                    this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'blue', ignore: ignore});
                     return this._info('Bank account data received is for different bank account.', ret);
                 }
                 frm._gc = ret;
                 let status = ret.status.toLowerCase(),
                 color = 'green';
+                frm._gc.ready = status === 'ready';
                 if ('error expired suspended'.indexOf(status) >= 0) color = 'red';
                 else if ('discovered processing'.indexOf(status) >= 0) color = 'blue';
                 this.disable_form(frm, {
                     message: __('Linked to Gocardless [<strong>{0}</strong>].', [__(ret.status)]),
-                    color: color
+                    color: color,
+                    ignore: ignore
                 });
-                if (status === 'ready') frm.events.gc_setup_error(frm);
-                if (this.is_enabled && status === 'ready') frm.events.gc_load_toolbar(frm);
+                if (frm._gc.ready) frm.events.gc_setup_error(frm);
+                if (this.is_enabled && frm._gc.ready) frm.events.gc_load_toolbar(frm);
             },
             function(e) {
-                this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'blue'});
+                this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'blue', ignore: ignore});
                 this._error(e.self ? e.message : __('Unable to get the bank account data for {0}.', [frm.docname]));
             }
         );

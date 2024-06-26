@@ -42,24 +42,32 @@ doctype_list_js = {
 
 doc_events = {
     "Bank": {
+        "before_save": "erpnext_gocardless_bank.libs.crud.bank.before_save_event",
         "on_trash": "erpnext_gocardless_bank.libs.crud.bank.on_trash_event"
     },
     "Bank Account": {
+        "before_save": "erpnext_gocardless_bank.libs.crud.bank_account.before_save_event",
         "on_trash": "erpnext_gocardless_bank.libs.crud.bank_account.on_trash_event"
     },
     "Bank Account Type": {
+        "before_save": "erpnext_gocardless_bank.libs.crud.bank_account_type.before_save_event",
         "on_trash": "erpnext_gocardless_bank.libs.crud.bank_account_type.on_trash_event"
     },
     "Bank Transaction": {
+        "before_update_after_submit": "erpnext_gocardless_bank.libs.crud.bank_transaction.before_update_after_submit_event",
+        "before_cancel": "erpnext_gocardless_bank.libs.crud.bank_transaction.before_cancel_event",
         "on_trash": "erpnext_gocardless_bank.libs.crud.bank_transaction.on_trash_event"
     },
     "Currency": {
+        "before_save": "erpnext_gocardless_bank.libs.crud.currency.before_save_event",
         "on_trash": "erpnext_gocardless_bank.libs.crud.currency.on_trash_event"
     },
     "Supplier": {
+        "before_save": "erpnext_gocardless_bank.libs.crud.supplier.before_save_event",
         "on_trash": "erpnext_gocardless_bank.libs.crud.supplier.on_trash_event"
     },
     "Customer": {
+        "before_save": "erpnext_gocardless_bank.libs.crud.customer.before_save_event",
         "on_trash": "erpnext_gocardless_bank.libs.crud.customer.on_trash_event"
     }
 }

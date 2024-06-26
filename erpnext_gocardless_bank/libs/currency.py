@@ -121,7 +121,7 @@ def enable_currencies(names):
                 from .common import store_error
                 
                 store_error({
-                    "error": "Unable to up currency.",
+                    "error": "Unable to enable currency.",
                     "name": name,
                     "exception": str(exc)
                 })
