@@ -23,21 +23,25 @@ frappe.ui.form.on('Bank Transaction', {
             frappe.gc()
                 .on('ready', function() {
                     if (cint(frm.doc.from_gocardless))
-                        this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'green', ignore: this.$filter(frm.meta.fields, function(v) {
-                            return ![
-                                'date',
-                                'status',
-                                'bank_account',
-                                'deposit',
-                                'withdrawal',
-                                'currency',
-                                'description',
-                                'gocardless_transaction_info',
-                                'reference_number',
-                                'transaction_id',
-                                'from_gocardless'
-                            ].includes(v.fieldname);
-                        })});
+                        this.disable_form(frm, {
+                            message: __('Linked to Gocardless.'),
+                            color: 'green',
+                            ignore: this.$map(this.$filter(frm.meta.fields, function(v) {
+                                return ![
+                                    'date',
+                                    'status',
+                                    'bank_account',
+                                    'deposit',
+                                    'withdrawal',
+                                    'currency',
+                                    'description',
+                                    'gocardless_transaction_info',
+                                    'reference_number',
+                                    'transaction_id',
+                                    'from_gocardless'
+                                ].includes(v.fieldname);
+                            }), function(v) { return v.fieldname; })
+                        });
                 })
                 .on('ready change', function() {
                     if (cint(frm.doc.from_gocardless) && this.$isStrVal(frm.doc.gocardless_transaction_info))

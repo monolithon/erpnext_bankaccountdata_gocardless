@@ -20,14 +20,15 @@ frappe.ui.form.on('Currency', {
             frappe.gc().on('ready', function() {
                 if (cint(frm.doc.from_gocardless))
                     this.disable_form(frm, {
-                        message: __('Linked to Gocardless.'), color: 'green',
-                        ignore: this.$filter(frm.meta.fields, function(v) {
+                        message: __('Linked to Gocardless.'),
+                        color: 'green',
+                        ignore: this.$map(this.$filter(frm.meta.fields, function(v) {
                             return ![
                                 'currency_name',
                                 'enabled',
                                 'from_gocardless'
                             ].includes(v.fieldname);
-                        })
+                        }), function(v) { return v.fieldname; })
                     });
             });
         }

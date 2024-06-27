@@ -35,7 +35,7 @@ frappe.ui.form.on('Bank Account', {
         gc_init();
     },
     gc_get_data: function(frm) {
-        var ignore = frappe.gc().$filter(frm.meta.fields, function(v) {
+        var ignore = frappe.gc().$map(frappe.gc().$filter(frm.meta.fields, function(v) {
             return ![
                 'account_name',
                 'gocardless_bank_account_no',
@@ -47,7 +47,7 @@ frappe.ui.form.on('Bank Account', {
                 'party',
                 'from_gocardless'
             ].includes(v.fieldname);
-        });
+        }), function(v) { return v.fieldname; });
         frappe.gc().request(
             'get_bank_account_data',
             {account: cstr(frm.docname)},
