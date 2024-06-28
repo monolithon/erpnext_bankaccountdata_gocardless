@@ -66,7 +66,7 @@ def parse_json(data, default=None):
         return default
 
 
-# [Api, Bank Transaction, Gocardless, Schedule, Sync Log, Internal]
+# [Api, Bank Transaction, Gocardless, Internal]
 def to_json(data, default=None, pretty=False):
     if data is None:
         return default
