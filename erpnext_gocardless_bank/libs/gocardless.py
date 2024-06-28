@@ -423,7 +423,7 @@ class Gocardless:
             self._log_error(err)
             return {"error": err, "sent": 1}
         
-        if not vals.get("booked", "") and not vals.get("pending", ""):
+        if "booked" not in vals and "pending" not in vals:
             self._store_error({
                 "error": "No booked and pending bank account transactions received.",
                 "account": account,
@@ -431,7 +431,7 @@ class Gocardless:
                 "date": [date_from, date_to or "today"],
                 "data": data
             })
-            err = _("Gocardless bank account transactions received for bank account \"{0}\" has no booked and pending data.").format(account)
+            err = _("Gocardless bank account transactions received for bank account \"{0}\" doesn't have booked and pending data.").format(account)
             self._log_error(err)
             return {"error": err, "sent": 1}
         
