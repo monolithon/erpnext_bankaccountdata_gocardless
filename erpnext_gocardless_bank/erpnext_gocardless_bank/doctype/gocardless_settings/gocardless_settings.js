@@ -341,7 +341,7 @@ frappe._gc_logs = {
         var me = this;
         frappe.gc().request(
             'load_log_file',
-            {filename: name},
+            {name: name},
             function(ret) {
                 if (!this.$isStrVal(ret)) me._dialog.toggle_error();
                 else me._dialog.toggle_content(ret);
@@ -416,7 +416,7 @@ frappe._gc_logs = {
             function() {
                 frappe.gc().request(
                     'remove_log_file',
-                    {filename: name},
+                    {name: name},
                     function(ret) {
                         if (ret) $tr.remove();
                         else this.error_(__('Unable to remove log file "{0}".', [name]));

@@ -23,18 +23,16 @@ def del_cache(dt: str, key: str):
 
 
 # [Bank, System, Internal]
-def get_cached_doc(dt: str, name: str=None, for_update: bool=False):
+def get_cached_doc(dt: str, name: str=None):
     if name is None:
         name = dt
-    if for_update:
-        clear_doc_cache(dt, name)
     if dt != name and not frappe.db.exists(dt, name):
         return None
     
-    return frappe.get_cached_doc(dt, name, for_update=for_update)
+    return frappe.get_cached_doc(dt, name)
 
 
-# [G Bank, G Setting, Bank, Bank Account, Bank Account Type, Bank Transaction, Currency, Internal]
+# [G Bank, G Setting, Bank, Bank Account, Bank Account Type, Bank Transaction, Currency, Customer, Supplier]
 def clear_doc_cache(dt: str, name: str=None):
     frappe.cache().delete_keys(dt)
     frappe.clear_cache(doctype=dt)

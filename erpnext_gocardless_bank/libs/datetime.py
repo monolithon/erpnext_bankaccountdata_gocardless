@@ -21,7 +21,7 @@ def today_datetime(dt=None):
     return to_datetime(dt or now_obj())
 
 
-# [Bank Transaction, Internal]
+# [Internal]
 def to_date(dt):
     from frappe.utils import DATE_FORMAT
     
@@ -107,7 +107,7 @@ def add_date(dt: str, **kwargs):
     return add_to_date(dt, as_datetime=False, **kwargs)
 
 
-# [Bank Transaction]
+# [Bank Transaction, Schedule]
 def date_to_datetime(dt: str, start=False):
     if start:
         dt = dt.split(" ")[0]
@@ -138,21 +138,9 @@ def dates_diff_seconds(sdt, edt):
     return cint((edt - sdt).total_seconds())
 
 
-# [Bank Transaction]
-def get_date_obj_range(fdt, tdt):
-    fdt = to_date_obj(fdt)
-    days = dates_diff_days(fdt, tdt)
-    if days <= 0:
-        return [fdt]
-    
-    from datetime import timedelta
-    
-    return [fdt + timedelta(days=x) for x in range(days + 1)]
-
-
 # [Bank Transaction, Schedule]
-def is_date_gt(fdt, sdt):
-    return dates_diff_days(sdt, fdt) > 0
+def is_date_gte(fdt, sdt):
+    return dates_diff_days(sdt, fdt) >= 0
 
 
 # [Internal]

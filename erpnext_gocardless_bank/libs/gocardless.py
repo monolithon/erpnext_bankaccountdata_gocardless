@@ -381,45 +381,61 @@ class Gocardless:
     
     
     # [Bank Transaction]
-    def get_account_transactions(self, account_id: str, date_from: str, date_to: str=None):
+    def get_account_transactions(self, account: str, account_id: str, date_from: str, date_to: str=None):
         data = self._send(Api.account_transactions(account_id, date_from, date_to))
-        if data is None or "error" in data:
+        if "error" in data:
             return data
         
         if "transactions" not in data:
             self._store_error({
-                "error": "Invalid bank account transactions received.", "account_id": account_id,
-                "date": [date_from, date_to], "data": data
+                "error": "Invalid bank account transactions received.",
+                "account": account,
+                "account_id": account_id,
+                "date": [date_from, date_to or "today"],
+                "data": data
             })
-            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) is invalid.").format(account_id))
-            return None
+            err = _("Gocardless bank account transactions received for bank account \"{0}\" is invalid.").format(account)
+            self._log_error(err)
+            return {"error": err, "sent": 1}
         
-        data = self._parse_json(data["transactions"])
-        if not isinstance(data, dict):
+        vals = self._parse_json(data["transactions"])
+        if not isinstance(vals, dict):
             self._store_error({
-                "error": "Invalid bank account transactions received.", "account_id": account_id,
-                "date": [date_from, date_to], "data": data
+                "error": "Invalid bank account transactions received.",
+                "account": account,
+                "account_id": account_id,
+                "date": [date_from, date_to or "today"],
+                "data": data
             })
-            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) is invalid.").format(account_id))
-            return None
+            err = _("Gocardless bank account transactions received for bank account \"{0}\" is invalid.").format(account)
+            self._log_error(err)
+            return {"error": err, "sent": 1}
         
-        if not data:
+        if not vals:
             self._store_error({
-                "error": "Empty bank account transactions received.", "account_id": account_id,
-                "date": [date_from, date_to], "data": data
+                "error": "Empty bank account transactions received.",
+                "account": account,
+                "account_id": account_id,
+                "date": [date_from, date_to or "today"],
+                "data": data
             })
-            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) is empty.").format(account_id))
-            return None
+            err = _("Gocardless bank account transactions received for bank account \"{0}\" is empty.").format(account)
+            self._log_error(err)
+            return {"error": err, "sent": 1}
         
-        if not data.get("booked", "") and not data.get("pending", ""):
+        if not vals.get("booked", "") and not vals.get("pending", ""):
             self._store_error({
-                "error": "No booked and pending bank account transactions received.", "account_id": account_id,
-                "date": [date_from, date_to], "data": data
+                "error": "No booked and pending bank account transactions received.",
+                "account": account,
+                "account_id": account_id,
+                "date": [date_from, date_to or "today"],
+                "data": data
             })
-            self._log_error(_("Gocardless bank account transactions received for bank account id ({0}) has no booked and pending data.").format(account_id))
-            return None
+            err = _("Gocardless bank account transactions received for bank account \"{0}\" has no booked and pending data.").format(account)
+            self._log_error(err)
+            return {"error": err, "sent": 1}
         
-        return data
+        return vals
     
     
     # [Bank Transaction]
@@ -444,9 +460,15 @@ class Gocardless:
         
         if auth or is_post:
             if auth and not self.access:
+                self._store_error({
+                    "error": "Access token is missing.",
+                    "url": url,
+                    "method": method,
+                    "data": data
+                })
                 err = _("Gocardless access token is missing.")
                 self._log_error(err)
-                return {"error": err}
+                return {"error": err, "sent": 0}
             
             headers = headers.copy()
             if auth:
@@ -462,19 +484,20 @@ class Gocardless:
             response = request.json()
         except Exception as exc:
             self._store_error({
-                "error": "Request failed. {0}".format(str(exc)),
+                "error": "Gocardless request sent has failed.",
                 "url": url,
                 "method": method,
-                "data": data
+                "data": data,
+                "exception": str(exc)
             })
-            err = _("Gocardless request failed. {0}").format(str(exc))
+            err = _("Gocardless request sent has failed.")
             self._log_error(err)
-            return {"error": err}
+            return {"error": err, "sent": 0}
         
         response = self._parse_json(response)
         if status not in Api.valid_status_codes:
             err = self._report_error(response)
-            return {"error": err}
+            return {"error": err, "sent": 1}
         
         if is_delete:
             return None
@@ -492,7 +515,7 @@ class Gocardless:
             })
             err = _("Gocardless response received is invalid.")
             self._log_error(err)
-            return {"error": err}
+            return {"error": err, "sent": 1}
         
         return response
     

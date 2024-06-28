@@ -76,7 +76,17 @@ frappe.ui.form.on('Bank Account', {
                     ignore: ignore
                 });
                 if (frm._gc.ready) frm.events.gc_setup_error(frm);
-                if (this.is_enabled && frm._gc.ready) frm.events.gc_load_toolbar(frm);
+                if (this.is_enabled && frm._gc.ready) {
+                    frm.events.gc_load_toolbar(frm);
+                    this.real('bank_account_sync_error', function(ret) {
+                        if (
+                            this.$isDataObj(ret) && this.$isStrVal(ret.error) && (
+                                (this.$isStrVal(ret.account_ref) && cstr(frm.docname) === ret.account_ref)
+                                || (this.$isStrVal(ret.bank_ref) && cstr(frm.doc.bank) === ret.bank_ref)
+                            )
+                        ) this.error(ret.error);
+                    });
+                }
             },
             function(e) {
                 this.disable_form(frm, {message: __('Linked to Gocardless.'), color: 'blue', ignore: ignore});
@@ -116,6 +126,10 @@ frappe.ui.form.on('Bank Account', {
     },
     gc_show_prompt: function(frm) {
         frappe.gc()._log('Accounts: prompting bank account sync dates');
+        let now = frappe.datetime.nowdate(),
+        max = frappe.datetime.now_date(true),
+        min = moment(max).sub(cint(frm._gc.transaction_days), 'days');
+        min = frappe.datetime.moment_to_date_obj(min);
         frappe.prompt(
             [
                 {
@@ -124,8 +138,9 @@ frappe.ui.form.on('Bank Account', {
                     label: __('From Date'),
                     reqd: 1,
                     bold: 1,
-                    'default': frappe.datetime.nowdate(),
-                    max_date: frappe.datetime.now_date(true),
+                    'default': now,
+                    min_date: min,
+                    max_date: max,
                 },
                 {
                     fieldname: 'to_dt',
@@ -133,8 +148,9 @@ frappe.ui.form.on('Bank Account', {
                     label: __('To Date'),
                     reqd: 1,
                     bold: 1,
-                    'default': frappe.datetime.nowdate(),
-                    max_date: frappe.datetime.now_date(true),
+                    'default': now,
+                    min_date: min,
+                    max_date: max,
                 },
             ],
             function(vals) {
@@ -166,6 +182,7 @@ frappe.ui.form.on('Bank Account', {
                 }
                 if (this.$isDataObj(ret) && ret.info) return this.info_(ret.info);
                 frm.custom_buttons[label].prop('disabled', false);
+                if (this.$isDataObj(ret) && ret.success) return this.success_(ret.success);
                 this.success_(__('Bank account "{0}" is syncing in background', [frm.docname]));
             },
             function(e) {

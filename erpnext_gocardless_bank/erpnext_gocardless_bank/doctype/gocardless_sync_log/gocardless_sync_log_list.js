@@ -16,4 +16,11 @@ frappe.listview_settings['Gocardless Sync Log'] = {
     primary_action: function() {
         frappe.gc().error(__('You cannot add logs manually.'));
     },
+    get_indicator: function(doc) {
+        let val = cstr(doc.status),
+        color = 'green';
+        if (val === 'Pending') color = 'gray';
+        else if (val === 'Ongoing') color = 'blue';
+        return [__(val), color, 'status,=,"' + val + '"'];
+    },
 };

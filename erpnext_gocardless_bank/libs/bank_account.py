@@ -6,6 +6,19 @@
 
 import frappe
 from frappe import _
+from frappe.utils import cstr
+
+from .api import Api
+
+
+# [Bank Transaction, Schedule, Internal]
+AccountStatus = []
+AccountStatus.extends([cstr(v).title() for v in Api.account_status["old"]])
+AccountStatus.extends([cstr(v).title() for v in Api.account_status["new"]])
+AccountStatus = frappe._dict(zip(
+    ["di", "pr", "er", "ex", "re", "su", "en", "de", "bl"],
+    AccountStatus
+))
 
 
 # [G Bank Form]
@@ -164,7 +177,8 @@ def get_bank_account_data(account):
             doc.account,
             doc.bank_account_ref,
             doc.status,
-            doc.last_sync
+            doc.last_sync,
+            pdoc.transaction_days
         )
         .inner_join(pdoc)
         .on(pdoc.name == doc.parent)
@@ -182,12 +196,15 @@ def get_bank_account_data(account):
         "bank_account": data["bank_account_ref"],
         "status": data["status"]
     }
-    if data["status"] == "Ready":
+    if data["status"] == AccountStatus.re:
+        from frappe.utils import cint
+        
         ret.update({
             "bank": data["parent"],
             "company": data["company"],
             "account": data["account"],
-            "last_sync": data["last_sync"]
+            "last_sync": data["last_sync"],
+            "transaction_days": cint(data["transaction_days"])
         })
     
     return ret
@@ -576,6 +593,49 @@ def add_party_bank_account(party, party_type, account_bank, company, account, ac
             })
     
     return 0
+
+
+# [Schedule]
+def expire_banks_bank_accounts(banks):
+    try:
+        dt = "Gocardless Bank"
+        doc = frappe.qb.DocType(f"{dt} Account")
+        (
+            frappe.qb.update(doc)
+            .set(doc.status, AccountStatus.ex)
+            .where(doc.parenttype == dt)
+            .where(doc.parentfield == "bank_accounts")
+            .where(doc.parent.isin(banks))
+        ).run()
+        return None
+    except Exception as exc:
+        return str(exc)
+
+
+# [Schedule]
+def get_unready_banks_bank_accounts(banks):
+    dt = "Gocardless Bank"
+    adt = f"{dt} Account"
+    data = frappe.get_all(
+        adt,
+        fields=[
+            "parent",
+            "name",
+            "account",
+            "account_id",
+            "status"
+        ],
+        filters=[
+            [adt, "parent", "in", banks],
+            [adt, "parenttype", "=", dt],
+            [adt, "parentfield", "=", "bank_accounts"],
+            [adt, "status", "!=", AccountStatus.re]
+        ]
+    )
+    if not data or not isinstance(data, list):
+        return None
+    
+    return data
 
 
 # [Internal]

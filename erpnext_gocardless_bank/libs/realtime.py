@@ -22,6 +22,11 @@ def emit_reload_bank_accounts(data=None):
     emit_event("gocardless_reload_bank_accounts", data)
 
 
+# [Bank Transaction]
+def emit_bank_account_sync_error(data=None):
+    emit_event("gocardless_bank_account_sync_error", data)
+
+
 # [Internal]
 def emit_event(event: str, data):
     frappe.publish_realtime(event=event, message=data)

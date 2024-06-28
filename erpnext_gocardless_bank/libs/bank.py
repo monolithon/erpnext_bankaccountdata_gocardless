@@ -8,6 +8,13 @@ import frappe
 from frappe import _
 
 
+# [Internal]
+AuthStatus = frappe._dict({
+    "l": "Linked",
+    "u": "Unlinked"
+})
+
+
 # [G Bank Form]
 @frappe.whitelist()
 def get_banks(company):
@@ -212,6 +219,93 @@ def get_bank_doc(name):
     from .cache import get_cached_doc
     
     return get_cached_doc("Gocardless Bank", name)
+
+
+# [Schedule]
+def get_expired_auth_banks():
+    from .datetime import today_date
+    
+    dt = "Gocardless Bank"
+    data = frappe.get_all(
+        dt,
+        fields=["name"],
+        filters=[
+            [dt, "docstatus", "=", 1],
+            [dt, "auth_id", "!=", ""],
+            [dt, "auth_status", "=", AuthStatus.l],
+            [dt, "auth_expiry", "<=", today_date()]
+        ],
+        pluck="name",
+        ignore_permissions=True,
+        strict=False
+    )
+    if not data or not isinstance(data, list):
+        return None
+    
+    return data
+
+
+# [Schedule]
+def expire_banks_auth(banks):
+    try:
+        doc = frappe.qb.DocType("Gocardless Bank")
+        (
+            frappe.qb.update(doc)
+            .set(doc.auth_id, "")
+            .set(doc.auth_expiry, "")
+            .set(doc.auth_status, AuthStatus.u)
+            .where(doc.name.isin(banks))
+        ).run()
+        return None
+    except Exception as exc:
+        return str(exc)
+
+
+# [Schedule]
+def get_auto_sync_banks():
+    from .datetime import today_date
+    
+    dt = "Gocardless Bank"
+    data = frappe.get_all(
+        dt,
+        fields=["name"],
+        filters=[
+            [dt, "docstatus", "=", 1],
+            [dt, "disabled", "=", 0],
+            [dt, "auto_sync", "=", 1],
+            [dt, "auth_id", "!=", ""],
+            [dt, "auth_status", "=", AuthStatus.l],
+            [dt, "auth_expiry", ">", today_date()]
+        ],
+        pluck="name",
+        ignore_permissions=True,
+        strict=False
+    )
+    if not data or not isinstance(data, list):
+        return None
+    
+    return data
+
+
+# [Schedule]
+def get_linked_banks():
+    dt = "Gocardless Bank"
+    data = frappe.get_all(
+        dt,
+        fields=["name", "bank", "company"],
+        filters=[
+            [dt, "docstatus", "=", 1],
+            [dt, "disabled", "=", 0],
+            [dt, "auth_id", "!=", ""],
+            [dt, "auth_status", "=", AuthStatus.l]
+        ],
+        ignore_permissions=True,
+        strict=False
+    )
+    if not data or not isinstance(data, list):
+        return None
+    
+    return {v["name"]:v for v in data}
 
 
 # [Internal]

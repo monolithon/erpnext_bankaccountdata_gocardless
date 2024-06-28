@@ -12,38 +12,59 @@ _LOG_DT_ = "Gocardless Sync Log"
 
 
 # [Bank Transaction]
-def get_sync_data(bank, account, date):
-    dt = _LOG_DT_
-    data = frappe.get_all(
-        dt,
-        fields=["sync_id"],
-        filters=[
-            [dt, "bank", "=", bank],
-            [dt, "bank_account", "=", account],
-            [dt, "modified", "between", [
-                date + " 00:00:00",
-                date + " 23:59:59"
-            ]]
-        ],
-        pluck="sync_id",
-        distinct=True,
-        ignore_permissions=True,
-        strict=False
-    )
-    if not isinstance(data, list):
-        return None
-    
-    return data
+LogTrigger = frappe._dict({
+    "a": "Auto",
+    "m": "Manual"
+})
+
+
+# [Internal]
+LogStatus = frappe._dict({
+    "p": "Pending",
+    "o": "Ongoing",
+    "f": "Finished"
+})
 
 
 # [Bank Transaction]
-def add_sync_data(sync_id, bank, account, trigger, total):
-    (frappe.new_doc(_LOG_DT_)
-        .update({
-            "sync_id": sync_id,
-            "bank": bank,
-            "bank_account": account,
-            "trigger": trigger,
-            "total_transactions": total
-        })
-        .insert(ignore_permissions=True, ignore_mandatory=True))
+def get_total_sync_logs(bank, account, today):
+    dt = _LOG_DT_
+    return frappe.db.count(
+        dt,
+        [
+            [dt, "bank", "=", bank],
+            [dt, "account", "=", account],
+            [dt, "creation", ">=", today]
+        ]
+    )
+
+
+# [Bank Transaction]
+def add_sync_data(bank, account, from_dt, to_dt, trigger):
+    doc = frappe.new_doc(_LOG_DT_)
+    doc.update({
+        "bank": bank,
+        "account": account,
+        "from_date": from_dt,
+        "to_date": to_dt,
+        "transactions": 0,
+        "trigger": trigger,
+        "status": LogStatus.p
+    })
+    doc.insert(ignore_permissions=True, ignore_mandatory=True)
+    return doc.name
+
+
+# [Bank Transaction]
+def ongoing_sync_status(name):
+    frappe.db.set_value(_LOG_DT_, name, "status", LogStatus.o)
+
+
+# [Bank Transaction]
+def update_sync_total(name, total):
+    frappe.db.set_value(_LOG_DT_, name, "transactions", total)
+
+
+# [Bank Transaction]
+def finish_sync_status(name):
+    frappe.db.set_value(_LOG_DT_, name, "status", LogStatus.f)

@@ -6,38 +6,39 @@
 
 import os
 import logging
-from logging.handlers import RotatingFileHandler
 
 import frappe
 
-from erpnext_gocardless_bank import __abbr__
-
 
 # [Common]
-def get_logger(logType):
-    if not logType:
-        logType = "error"
+def get_logger(log_type):
+    from logging.handlers import RotatingFileHandler
+    
+    from erpnext_gocardless_bank import __abbr__
+    
+    if not log_type:
+        log_type = "error"
+    
     site = getattr(frappe.local, "site", None)
     if not site:
         site = "ERPNext"
     
-    logger_name = "{}-{}-{}".format(__abbr__, site, logType)
-    
+    key = "{}-{}-{}".format(site, __abbr__, log_type)
     try:
-        return frappe.loggers[logger_name]
+        return frappe.loggers[key]
     except KeyError:
         pass
     
-    logfile = "{}-{}.log".format(__abbr__, logType)
+    logfile = "{}-{}.log".format(__abbr__, log_type)
     logfile = os.path.join("..", "logs", logfile)
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(getattr(logging, logType.upper(), None) or logging.ERROR)
+    logger = logging.getLogger(key)
+    logger.setLevel(getattr(logging, log_type.upper(), None) or logging.ERROR)
     logger.propagate = False
-    handler = RotatingFileHandler(logfile, maxBytes=100_000, backupCount=20)
-    handler.setLevel(getattr(logging, logType.upper(), None) or logging.ERROR)
+    handler = RotatingFileHandler(logfile, maxBytes=500_000, backupCount=20)
+    handler.setLevel(getattr(logging, log_type.upper(), None) or logging.ERROR)
     handler.setFormatter(LoggingCustomFormatter())
     logger.addHandler(handler)
-    frappe.loggers[logger_name] = logger
+    frappe.loggers[key] = logger
     return logger
 
 
@@ -46,13 +47,15 @@ def get_logger(logType):
 def get_log_files():
     import glob
     
+    from erpnext_gocardless_bank import __abbr__
+    
     try:
         ret = []
         path = os.path.join("..", "logs")
         if not path.endswith("/"):
             path = path + "/"
         for f in glob.glob(path + __abbr__ + "-*.log*"):
-            ret.append(f.strip("/").split("/")[-1])
+            ret.append(f.strip("/").split("/")[-1].split(".")[0])
         
         return ret
     except Exception:
@@ -61,16 +64,12 @@ def get_log_files():
 
 # [G Settings Form]
 @frappe.whitelist(methods=["POST"])
-def load_log_file(filename):
-    if (
-        not filename or
-        not isinstance(filename, str) or
-        not filename.startswith(__abbr__)
-    ):
+def load_log_file(name):
+    if not name or not isinstance(name, str):
         return 0
     
     try:
-        path = os.path.join("..", "logs", filename)
+        path = os.path.join("..", "logs", f"{name}.log")
         if not os.path.exists(path):
             return 0
         
@@ -84,16 +83,12 @@ def load_log_file(filename):
 
 # [G Settings Form]
 @frappe.whitelist(methods=["POST"])
-def remove_log_file(filename):
-    if (
-        not filename or
-        not isinstance(filename, str) or
-        not filename.startswith(__abbr__)
-    ):
+def remove_log_file(name):
+    if not name or not isinstance(name, str):
         return 0
     
     try:
-        path = os.path.join("..", "logs", filename)
+        path = os.path.join("..", "logs", f"{name}.log")
         if not os.path.exists(path):
             return 0
         

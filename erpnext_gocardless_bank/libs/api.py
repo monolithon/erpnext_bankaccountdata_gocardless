@@ -83,12 +83,12 @@ class Api:
     @staticmethod
     def account_transactions(account_id, date_from=None, date_to=None):
         uri = f"accounts/{account_id}/transactions/"
-        qry = []
         if date_from:
+            qry = []
             qry.append(f"date_from={date_from}")
-        if date_to:
-            qry.append(f"date_to={date_to}")
-        if qry:
+            if date_to:
+                qry.append(f"date_to={date_to}")
+            
             qry = "&".join(qry)
             uri = f"{uri}?{qry}"
         

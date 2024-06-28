@@ -530,6 +530,14 @@ frappe.gc_accounts = {
         this._$table.on('click', 'button.gc-balance', this._on_balance);
         this._$table.on('click', 'button.gc-action', this._on_action);
         this._$table.on('click', 'button.gc-link', this._on_link);
+        frappe.gc().real('bank_account_sync_error', frappe.gc().$fn(function(ret) {
+            if (
+                frappe.gc().$isDataObj(ret) && frappe.gc().$isStrVal(ret.error) && (
+                    (frappe.gc().$isStrVal(ret.name) && cstr(this._frm.docname) === ret.name)
+                    || (frappe.gc().$isStrVal(ret.bank) && cstr(this._frm.doc.bank) === ret.bank)
+                )
+            ) frappe.gc().error(ret.error);
+        }, this));
     },
     _refresh_btns() {
         if (frappe.gc().is_enabled === this._enabled) return;
@@ -726,6 +734,10 @@ frappe.gc_accounts = {
     },
     _show_prompt($el, account) {
         frappe.gc()._log('Accounts: prompting bank account sync dates');
+        let now = frappe.datetime.nowdate(),
+        max = frappe.datetime.now_date(true),
+        min = moment(max).sub(cint(this._frm.doc.transaction_days), 'days');
+        min = frappe.datetime.moment_to_date_obj(min);
         frappe.prompt(
             [
                 {
@@ -734,8 +746,9 @@ frappe.gc_accounts = {
                     label: __('From Date'),
                     reqd: 1,
                     bold: 1,
-                    'default': frappe.datetime.nowdate(),
-                    max_date: frappe.datetime.now_date(true),
+                    'default': now,
+                    min_date: min,
+                    max_date: max,
                 },
                 {
                     fieldname: 'to_dt',
@@ -743,8 +756,9 @@ frappe.gc_accounts = {
                     label: __('To Date'),
                     reqd: 1,
                     bold: 1,
-                    'default': frappe.datetime.nowdate(),
-                    max_date: frappe.datetime.now_date(true),
+                    'default': now,
+                    min_date: min,
+                    max_date: max,
                 },
             ],
             frappe.gc().$fn(function(vals) {
