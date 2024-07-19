@@ -13,8 +13,8 @@ from .api import Api
 
 # [Bank Transaction, Schedule, Internal]
 AccountStatus = []
-AccountStatus.extends([cstr(v).title() for v in Api.account_status["old"]])
-AccountStatus.extends([cstr(v).title() for v in Api.account_status["new"]])
+AccountStatus.extend([cstr(v).title() for v in Api.account_status["old"]])
+AccountStatus.extend([cstr(v).title() for v in Api.account_status["new"]])
 AccountStatus = frappe._dict(zip(
     ["di", "pr", "er", "ex", "re", "su", "en", "de", "bl"],
     AccountStatus
